@@ -1337,6 +1337,10 @@ struct TabBarView: View {
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal, showsIndicators: false) {
                         tabScrollContent
+                            .background(
+                                TabBarScrollWheelRedirector()
+                                    .frame(width: 0, height: 0)
+                            )
                     }
                     .background(
                         TabBarScrollViewResolver { scrollView in
@@ -3823,5 +3827,78 @@ struct TabDropDelegate: DropDelegate {
             return decodeTransfer(from: raw)
         }
         return nil
+    }
+}
+
+// MARK: - Scroll Wheel Redirector
+
+/// Redirects vertical mouse-wheel events to horizontal scrolling on the
+/// enclosing NSScrollView. Trackpad events (which have precise deltas)
+/// are left untouched since macOS already handles them correctly.
+///
+/// Follows the same NSEvent monitor + Coordinator pattern as
+/// MiddleClickMonitorView in TabItemView.swift.
+private struct TabBarScrollWheelRedirector: NSViewRepresentable {
+    final class Coordinator {
+        weak var view: NSView?
+        var monitor: Any?
+
+        deinit {
+            if let monitor {
+                NSEvent.removeMonitor(monitor)
+            }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.clear.cgColor
+
+        context.coordinator.view = view
+
+        let coordinator = context.coordinator
+        coordinator.monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel]) { [weak coordinator] event in
+            guard let coordinator, let hostView = coordinator.view, let window = hostView.window else {
+                return event
+            }
+            guard event.window === window else { return event }
+
+            // Only redirect discrete mouse-wheel events (not trackpad).
+            guard !event.hasPreciseScrollingDeltas,
+                  event.scrollingDeltaY != 0 else {
+                return event
+            }
+
+            // Resolve the horizontal scroll view backing the tab strip.
+            guard let scrollView = hostView.enclosingScrollView,
+                  let documentView = scrollView.documentView else {
+                return event
+            }
+
+            // Hit-test: only handle events within the scroll view's visible area.
+            let location = scrollView.convert(event.locationInWindow, from: nil)
+            guard scrollView.bounds.contains(location) else { return event }
+
+            let clipView = scrollView.contentView
+            let maxX = max(0, documentView.frame.width - clipView.bounds.width)
+            let currentX = clipView.bounds.origin.x
+            // 50pt per wheel detent ≈ one tab width.
+            let newX = min(max(currentX - event.scrollingDeltaY * 50, 0), maxX)
+
+            guard abs(newX - currentX) > 0.5 else { return event }
+
+            clipView.scroll(to: NSPoint(x: newX, y: clipView.bounds.origin.y))
+            scrollView.reflectScrolledClipView(clipView)
+            return nil // consume the event
+        }
+
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.view = nsView
     }
 }
