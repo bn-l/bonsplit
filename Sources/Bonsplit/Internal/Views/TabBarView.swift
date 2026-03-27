@@ -1337,10 +1337,6 @@ struct TabBarView: View {
                 ScrollViewReader { proxy in
                     ScrollView(.horizontal, showsIndicators: false) {
                         tabScrollContent
-                            .background(
-                                TabBarScrollWheelRedirector()
-                                    .frame(width: 0, height: 0)
-                            )
                     }
                     .background(
                         TabBarScrollViewResolver { scrollView in
@@ -1378,6 +1374,10 @@ struct TabBarView: View {
                         }
                     }
                     .coordinateSpace(name: "tabScroll")
+                    .background(
+                        TabBarScrollWheelRedirector()
+                            .frame(width: 0, height: 0)
+                    )
                     .onAppear {
                         containerWidth = containerGeo.size.width
                         scrollToPreferredTarget(proxy, selectedTabId: pane.selectedTabId)
@@ -3832,15 +3832,17 @@ struct TabDropDelegate: DropDelegate {
 
 // MARK: - Scroll Wheel Redirector
 
-/// Redirects vertical mouse-wheel events to horizontal scrolling on the
-/// enclosing NSScrollView. Trackpad events (which have precise deltas)
-/// are left untouched since macOS already handles them correctly.
+/// Redirects vertical scroll events to horizontal scrolling on the
+/// enclosing NSScrollView. Handles both discrete mouse-wheel events and
+/// trackpad vertical-only gestures.
 ///
 /// Follows the same NSEvent monitor + Coordinator pattern as
-/// MiddleClickMonitorView in TabItemView.swift.
+/// MiddleClickMonitorView in TabItemView.swift, and the same async
+/// scroll-view resolution as SidebarScrollViewResolver.
 private struct TabBarScrollWheelRedirector: NSViewRepresentable {
     final class Coordinator {
-        weak var view: NSView?
+        weak var hostView: NSView?
+        weak var resolvedScrollView: NSScrollView?
         var monitor: Any?
 
         deinit {
@@ -3848,32 +3850,78 @@ private struct TabBarScrollWheelRedirector: NSViewRepresentable {
                 NSEvent.removeMonitor(monitor)
             }
         }
+
+        /// Walk the superview chain to find a horizontal NSScrollView.
+        /// Falls back to searching the parent's subview tree when
+        /// `enclosingScrollView` fails (SwiftUI bridging can break the chain).
+        func resolveScrollView() {
+            guard resolvedScrollView == nil || resolvedScrollView?.superview == nil else { return }
+            guard let view = hostView else { return }
+
+            // Preferred: direct ancestor lookup.
+            if let sv = view.enclosingScrollView {
+                resolvedScrollView = sv
+                return
+            }
+
+            // Fallback: walk up to find the nearest parent whose subtree contains
+            // a horizontal NSScrollView at the same level (SwiftUI .background()
+            // siblings may not share a direct ancestor chain).
+            var candidate = view.superview
+            while let parent = candidate {
+                if let found = Self.findScrollView(in: parent, excluding: view) {
+                    resolvedScrollView = found
+                    return
+                }
+                candidate = parent.superview
+            }
+        }
+
+        private static func findScrollView(in view: NSView, excluding: NSView) -> NSScrollView? {
+            if let sv = view as? NSScrollView { return sv }
+            for sub in view.subviews where sub !== excluding {
+                if let found = findScrollView(in: sub, excluding: excluding) {
+                    return found
+                }
+            }
+            return nil
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView(frame: .zero)
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.clear.cgColor
+        context.coordinator.hostView = view
 
-        context.coordinator.view = view
+        // Resolve the scroll view after the view is attached to the hierarchy.
+        DispatchQueue.main.async { [weak coordinator = context.coordinator] in
+            coordinator?.resolveScrollView()
+        }
 
         let coordinator = context.coordinator
         coordinator.monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel]) { [weak coordinator] event in
-            guard let coordinator, let hostView = coordinator.view, let window = hostView.window else {
-                return event
-            }
-            guard event.window === window else { return event }
-
-            // Only redirect discrete mouse-wheel events (not trackpad).
-            guard !event.hasPreciseScrollingDeltas,
-                  event.scrollingDeltaY != 0 else {
+            guard let coordinator,
+                  let hostView = coordinator.hostView,
+                  let window = hostView.window,
+                  event.window === window else {
                 return event
             }
 
-            // Resolve the horizontal scroll view backing the tab strip.
-            guard let scrollView = hostView.enclosingScrollView,
+            // Skip events with no vertical component.
+            guard event.scrollingDeltaY != 0 else { return event }
+
+            // For trackpad (precise) events, only redirect pure-vertical gestures.
+            // Diagonal or horizontal swipes should pass through natively.
+            if event.hasPreciseScrollingDeltas, event.scrollingDeltaX != 0 {
+                return event
+            }
+
+            // Lazy-resolve if needed (view hierarchy may settle after first event).
+            if coordinator.resolvedScrollView == nil || coordinator.resolvedScrollView?.superview == nil {
+                coordinator.resolveScrollView()
+            }
+            guard let scrollView = coordinator.resolvedScrollView,
                   let documentView = scrollView.documentView else {
                 return event
             }
@@ -3885,9 +3933,17 @@ private struct TabBarScrollWheelRedirector: NSViewRepresentable {
             let clipView = scrollView.contentView
             let maxX = max(0, documentView.frame.width - clipView.bounds.width)
             let currentX = clipView.bounds.origin.x
-            // 50pt per wheel detent ≈ one tab width.
-            let newX = min(max(currentX - event.scrollingDeltaY * 50, 0), maxX)
 
+            // Scale: discrete mouse-wheel events report ~1.0 per detent;
+            // trackpad precise deltas are already in points.
+            let step: CGFloat
+            if event.hasPreciseScrollingDeltas {
+                step = event.scrollingDeltaY
+            } else {
+                step = event.scrollingDeltaY * 50
+            }
+
+            let newX = min(max(currentX - step, 0), maxX)
             guard abs(newX - currentX) > 0.5 else { return event }
 
             clipView.scroll(to: NSPoint(x: newX, y: clipView.bounds.origin.y))
@@ -3899,6 +3955,10 @@ private struct TabBarScrollWheelRedirector: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.view = nsView
+        context.coordinator.hostView = nsView
+        // Re-resolve if the view hierarchy changed (e.g. SwiftUI recreated the hosting view).
+        DispatchQueue.main.async { [weak coordinator = context.coordinator] in
+            coordinator?.resolveScrollView()
+        }
     }
 }
