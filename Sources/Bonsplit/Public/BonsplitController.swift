@@ -81,6 +81,10 @@ public final class BonsplitController {
     /// Internal host-driven closes should not use this hook.
     @ObservationIgnored public var onTabCloseRequest: ((_ tabId: TabID, _ paneId: PaneID) -> Void)?
 
+    /// Called when the user explicitly requests to toggle zoom from tab chrome.
+    /// When set, the host owns the full toggle and should return whether it succeeded.
+    @ObservationIgnored public var onTabZoomToggleRequest: ((_ tabId: TabID, _ paneId: PaneID) -> Bool)?
+
     // MARK: - Internal State
 
     internal var internalController: SplitViewController
@@ -645,6 +649,18 @@ public final class BonsplitController {
         let targetPaneId = paneId ?? focusedPaneId
         guard let targetPaneId else { return false }
         return internalController.togglePaneZoom(targetPaneId)
+    }
+
+    /// Request a tab-chrome zoom toggle for a specific tab.
+    /// Hosts can intercept this to run their own focus/layout reconciliation.
+    @discardableResult
+    public func requestTabZoomToggle(for tabId: TabID, inPane paneId: PaneID) -> Bool {
+        guard let (pane, _) = findTabInternal(tabId),
+              pane.id == paneId else { return false }
+        if let onTabZoomToggleRequest {
+            return onTabZoomToggleRequest(tabId, paneId)
+        }
+        return togglePaneZoom(inPane: paneId)
     }
 
     // MARK: - Context Menu Shortcut Hints
