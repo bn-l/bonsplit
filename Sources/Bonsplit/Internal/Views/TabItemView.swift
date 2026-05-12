@@ -197,7 +197,14 @@ struct TabItemView: View {
             onContextAction: onContextAction,
             onMoveDestination: onMoveDestination
         ))
-        .gesture(selectionOrZoomGesture)
+        .onTapGesture {
+            onSelect()
+        }
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded {
+                onZoomToggle()
+            }
+        )
         .onHover { hovering in
             // Keep icon rendering stable while hovering; only accessory/background elements animate.
             isHovered = hovering
@@ -207,16 +214,6 @@ struct TabItemView: View {
         .accessibilityValue(accessibilityValue)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .safeHelp(tab.title)
-    }
-
-    private var selectionOrZoomGesture: some Gesture {
-        TapGesture(count: 2)
-            .onEnded {
-                onZoomToggle()
-            }
-            .exclusively(before: TapGesture(count: 1).onEnded {
-                onSelect()
-            })
     }
 
     private func glyphSize(for iconName: String) -> CGFloat {
