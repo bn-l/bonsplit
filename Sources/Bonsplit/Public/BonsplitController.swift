@@ -83,7 +83,7 @@ public final class BonsplitController {
 
     /// Called when the user explicitly requests to toggle zoom from tab chrome.
     /// When set, the host owns the full toggle and should return whether it succeeded.
-    @ObservationIgnored public var onTabZoomToggleRequest: ((_ tabId: TabID, _ paneId: PaneID) -> Bool)?
+    @ObservationIgnored public var onTabZoomToggleRequest: (@MainActor (_ tabId: TabID, _ paneId: PaneID) -> Bool)?
 
     // MARK: - Internal State
 
