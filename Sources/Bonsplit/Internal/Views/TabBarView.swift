@@ -365,7 +365,16 @@ struct TabBarLayout: Equatable {
 
     var maximumSplitButtonLaneWidth: CGFloat {
         guard availableWidth > 0 else { return fullSplitButtonLaneWidth }
-        return availableWidth * TabBarStyling.maximumSplitButtonLaneWidthFraction
+        let fractionLimit = availableWidth * TabBarStyling.maximumSplitButtonLaneWidthFraction
+        return max(fractionLimit, trailingWhitespaceBeforeSplitButtonLane)
+    }
+
+    var trailingWhitespaceBeforeSplitButtonLane: CGFloat {
+        guard availableWidth > 0,
+              let tabContentWidthExcludingSplitButtonLane else {
+            return 0
+        }
+        return max(0, availableWidth - tabContentWidthExcludingSplitButtonLane)
     }
 
     var visibleSplitButtonLaneWidth: CGFloat {
@@ -764,6 +773,7 @@ struct TabBarView: View {
     @State private var dropLifecycle: TabDropLifecycle = .idle
     @State private var scrollOffset: CGFloat = 0
     @State private var contentWidth: CGFloat = 0
+    @State private var tabContentWidthExcludingSplitButtonLane: CGFloat?
     @State private var containerWidth: CGFloat = 0
     @State private var selectedTabFrameInBar: CGRect?
     @State private var tabFramesInBar: [UUID: CGRect] = [:]
@@ -806,6 +816,7 @@ struct TabBarView: View {
         TabBarLayout(
             tabBarHeight: appearance.tabBarHeight,
             availableWidth: containerWidth,
+            tabContentWidthExcludingSplitButtonLane: tabContentWidthExcludingSplitButtonLane,
             splitButtonCount: visibleSplitButtons.count,
             splitButtonLaneVisible: shouldShowSplitButtons,
             reservesSplitButtonLane: showSplitButtons && !isMinimalMode,
@@ -947,13 +958,11 @@ struct TabBarView: View {
                             GeometryReader { contentGeo in
                                 Color.clear
                                     .onChange(of: contentGeo.frame(in: .named("tabScroll"))) { _, newFrame in
-                                        scrollOffset = -newFrame.minX
-                                        contentWidth = newFrame.width
+                                        updateTabScrollContent(frame: newFrame)
                                     }
                                     .onAppear {
                                         let frame = contentGeo.frame(in: .named("tabScroll"))
-                                        scrollOffset = -frame.minX
-                                        contentWidth = frame.width
+                                        updateTabScrollContent(frame: frame)
                                     }
                             }
                         )
@@ -1537,6 +1546,12 @@ struct TabBarView: View {
     private func updateSplitButtonScrollContent(frame: CGRect) {
         splitButtonScrollOffset = max(0, -frame.minX)
         splitButtonContentWidth = frame.width
+    }
+
+    private func updateTabScrollContent(frame: CGRect) {
+        scrollOffset = -frame.minX
+        contentWidth = frame.width
+        tabContentWidthExcludingSplitButtonLane = max(0, frame.width - tabBarLayout.trailingTabContentInset)
     }
 
     @ViewBuilder
