@@ -329,6 +329,7 @@ enum TabBarStyling {
 struct TabBarLayout: Equatable {
     let barHeight: CGFloat
     let availableWidth: CGFloat
+    let tabContentWidthExcludingSplitButtonLane: CGFloat?
     let splitButtonCount: Int
     let splitButtonLaneVisible: Bool
     let reservesSplitButtonLane: Bool
@@ -337,6 +338,7 @@ struct TabBarLayout: Equatable {
     init(
         tabBarHeight: CGFloat,
         availableWidth: CGFloat = 0,
+        tabContentWidthExcludingSplitButtonLane: CGFloat? = nil,
         splitButtonCount: Int,
         splitButtonLaneVisible: Bool,
         reservesSplitButtonLane: Bool,
@@ -344,6 +346,7 @@ struct TabBarLayout: Equatable {
     ) {
         self.barHeight = max(1, tabBarHeight)
         self.availableWidth = max(0, availableWidth)
+        self.tabContentWidthExcludingSplitButtonLane = tabContentWidthExcludingSplitButtonLane.map { max(0, $0) }
         self.splitButtonCount = max(0, splitButtonCount)
         self.splitButtonLaneVisible = splitButtonLaneVisible
         self.reservesSplitButtonLane = reservesSplitButtonLane
