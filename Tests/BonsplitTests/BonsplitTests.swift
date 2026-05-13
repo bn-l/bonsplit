@@ -1326,16 +1326,24 @@ final class BonsplitTests: XCTestCase {
             canMoveToRightPane: true,
             isZoomed: false,
             hasSplits: true,
-            moveDestinations: [
-                TabContextMoveDestination(id: "workspace:abc", title: "Workspace A", isEnabled: false)
-            ],
             shortcuts: [:]
         )
-        let snapshot = TabContextMenuSnapshot(tabId: UUID(), state: state)
+        var moveDestinationRequestCount = 0
+        let snapshot = TabContextMenuSnapshot(
+            tabId: UUID(),
+            state: state,
+            moveDestinationsProvider: {
+                moveDestinationRequestCount += 1
+                return [
+                    TabContextMoveDestination(id: "workspace:abc", title: "Workspace A", isEnabled: false)
+                ]
+            }
+        )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
         let moveItem = menu.items.first { $0.title == "Move Tab" }
 
+        XCTAssertEqual(moveDestinationRequestCount, 1)
         XCTAssertNotNil(moveItem)
         XCTAssertTrue(moveItem?.isEnabled ?? false)
         XCTAssertEqual(moveItem?.submenu?.items.map(\.title), ["Move Tab to New Workspace", "Workspace A"])

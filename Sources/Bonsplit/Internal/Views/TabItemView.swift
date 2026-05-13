@@ -58,6 +58,7 @@ struct TabItemView: View {
     let showsControlShortcutHint: Bool
     let shortcutModifierSymbol: String
     let contextMenuState: TabContextMenuState
+    let moveDestinationsProvider: () -> [TabContextMoveDestination]
     let onSelect: () -> Void
     let onClose: () -> Void
     let onZoomToggle: () -> Void
@@ -193,7 +194,11 @@ struct TabItemView: View {
             onClose()
         }))
         .background(TabContextMenuPresenter(
-            snapshot: TabContextMenuSnapshot(tabId: tab.id, state: contextMenuState),
+            snapshot: TabContextMenuSnapshot(
+                tabId: tab.id,
+                state: contextMenuState,
+                moveDestinationsProvider: moveDestinationsProvider
+            ),
             onContextAction: onContextAction,
             onMoveDestination: onMoveDestination
         ))
@@ -561,6 +566,7 @@ private struct MiddleClickMonitorView: NSViewRepresentable {
 struct TabContextMenuSnapshot {
     let tabId: UUID
     let state: TabContextMenuState
+    let moveDestinationsProvider: () -> [TabContextMoveDestination]
 }
 
 final class TabContextMenuActionTarget: NSObject {
@@ -635,7 +641,7 @@ enum TabContextMenuBuilder {
             to: menu
         )
 
-        menu.addItem(moveSubmenuItem(state: state, target: target))
+        menu.addItem(moveSubmenuItem(snapshot: snapshot, target: target))
 
         if state.isTerminal {
             addAction(
@@ -749,9 +755,11 @@ enum TabContextMenuBuilder {
     }
 
     private static func moveSubmenuItem(
-        state: TabContextMenuState,
+        snapshot: TabContextMenuSnapshot,
         target: TabContextMenuActionTarget
     ) -> NSMenuItem {
+        let state = snapshot.state
+        let moveDestinations = snapshot.moveDestinationsProvider()
         let item = NSMenuItem(
             title: localized("tabContext.moveTab", defaultValue: "Move Tab"),
             action: nil,
@@ -767,7 +775,7 @@ enum TabContextMenuBuilder {
             target: target,
             to: submenu
         )
-        for destination in state.moveDestinations {
+        for destination in moveDestinations {
             let destinationItem = NSMenuItem(
                 title: destination.title,
                 action: #selector(TabContextMenuActionTarget.performMoveDestination(_:)),
@@ -779,7 +787,7 @@ enum TabContextMenuBuilder {
             submenu.addItem(destinationItem)
         }
         item.submenu = submenu
-        item.isEnabled = state.canMoveToNewWorkspace || !state.moveDestinations.isEmpty
+        item.isEnabled = state.canMoveToNewWorkspace || !moveDestinations.isEmpty
         return item
     }
 

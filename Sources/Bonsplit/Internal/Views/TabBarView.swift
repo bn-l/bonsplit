@@ -733,7 +733,6 @@ struct TabContextMenuState {
     let canMoveToRightPane: Bool
     let isZoomed: Bool
     let hasSplits: Bool
-    let moveDestinations: [TabContextMoveDestination]
     let shortcuts: [TabContextAction: KeyboardShortcut]
 
     var canMarkAsUnread: Bool {
@@ -1124,6 +1123,9 @@ struct TabBarView: View {
             showsControlShortcutHint: showsControlShortcutHints,
             shortcutModifierSymbol: controlKeyMonitor.shortcutModifierSymbol,
             contextMenuState: contextMenuState,
+            moveDestinationsProvider: {
+                controller.tabContextMoveDestinationsProvider?(TabID(id: tab.id), pane.id) ?? []
+            },
             onSelect: {
                 // Tab selection must be instant. Animating this transaction causes the pane
                 // content (often swapped via opacity) to crossfade, which is undesirable for
@@ -1219,7 +1221,6 @@ struct TabBarView: View {
             canMoveToRightPane: controller.adjacentPane(to: pane.id, direction: .right) != nil,
             isZoomed: splitViewController.zoomedPaneId == pane.id,
             hasSplits: splitViewController.rootNode.allPaneIds.count > 1,
-            moveDestinations: controller.tabContextMoveDestinationsProvider?(TabID(id: tab.id), pane.id) ?? [],
             shortcuts: controller.contextMenuShortcuts
         )
     }
