@@ -3115,9 +3115,9 @@ final class BonsplitTests: XCTestCase {
             showSplitButtons: true,
             size: size,
             configurePane: { pane in
-                let selected = TabItem(title: "", icon: nil)
-                pane.tabs = [selected]
-                pane.selectedTabId = selected.id
+                let tabs = (0..<8).map { _ in TabItem(title: "", icon: nil) }
+                pane.tabs = tabs
+                pane.selectedTabId = tabs.first?.id
             }
         ) { hostingView in
             maximumBrightness(
