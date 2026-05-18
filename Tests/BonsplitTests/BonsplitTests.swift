@@ -2650,6 +2650,41 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabBarDragZoneCursorMarksOnlyMinimalModeWindowDragArea() {
+        let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 30))
+        view.hitRegion = .trailingEmptyChrome(
+            tabFrames: [CGRect(x: 10, y: 0, width: 90, height: 30)],
+            reservedTrailingWidth: 48
+        )
+
+        XCTAssertEqual(
+            view.windowDragCursorRectsForCurrentState(),
+            [],
+            "Standard mode should not advertise tab-bar window dragging with an open-hand cursor"
+        )
+
+        view.isMinimalMode = true
+
+        XCTAssertEqual(
+            view.windowDragCursorRectsForCurrentState(),
+            [NSRect(x: 102, y: 0, width: 170, height: 30)],
+            "Minimal mode should show the open-hand cursor only in empty chrome after the tab frames and before action buttons"
+        )
+    }
+
+    @MainActor
+    func testTabBarDragZoneCursorCoversEntireExplicitDragZoneInMinimalMode() {
+        let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
+        view.isMinimalMode = true
+
+        XCTAssertEqual(
+            view.windowDragCursorRectsForCurrentState(),
+            [view.bounds],
+            "Explicit leading and inline empty drag zones should be visibly marked as window-drag chrome in minimal mode"
+        )
+    }
+
+    @MainActor
     func testTabBarDragZoneKeepsFocusedPaneWindowDragInMinimalMode() throws {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
         view.isMinimalMode = true

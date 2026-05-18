@@ -2563,9 +2563,13 @@ struct TabBarDragZoneView: NSViewRepresentable {
     }
 
     final class DragNSView: NSView {
-        var hitRegion = HitRegion.entireBounds
+        var hitRegion = HitRegion.entireBounds {
+            didSet { invalidateWindowDragCursorRects() }
+        }
         var hitTestEventTypeOverride: NSEvent.EventType?
-        var isMinimalMode = false
+        var isMinimalMode = false {
+            didSet { invalidateWindowDragCursorRects() }
+        }
         var isFocusedPane = false
         var onSingleClick: (() -> Bool)?
         var onDoubleClick: (() -> Bool)?
@@ -2583,6 +2587,18 @@ struct TabBarDragZoneView: NSViewRepresentable {
         // window.performDrag flow below. See `NonDraggableHostingView` in
         // SplitNodeView.swift for the same class of bug on pane tab clicks.
         override var mouseDownCanMoveWindow: Bool { false }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            invalidateWindowDragCursorRects()
+        }
+
+        override func resetCursorRects() {
+            super.resetCursorRects()
+            for rect in windowDragCursorRectsForCurrentState() {
+                addCursorRect(rect, cursor: .openHand)
+            }
+        }
 
         override func hitTest(_ point: NSPoint) -> NSView? {
             guard shouldCaptureHit(at: point) else { return nil }
@@ -2667,6 +2683,36 @@ struct TabBarDragZoneView: NSViewRepresentable {
                 let startX = paddedFrames.map(\.maxX).max() ?? bounds.minX
                 return point.x >= startX
             }
+        }
+
+        func windowDragCursorRectsForCurrentState() -> [NSRect] {
+            guard isMinimalMode, !bounds.isEmpty else { return [] }
+
+            switch hitRegion {
+            case .entireBounds:
+                return [bounds]
+            case .trailingEmptyChrome(let tabFrames, let reservedTrailingWidth):
+                let trailingLimit = bounds.maxX - max(0, reservedTrailingWidth)
+                guard trailingLimit > bounds.minX else { return [] }
+
+                let paddedFrames = tabFrames.map { $0.insetBy(dx: -2, dy: -2) }
+                let startX = max(bounds.minX, paddedFrames.map(\.maxX).max() ?? bounds.minX)
+                guard trailingLimit > startX else { return [] }
+
+                return [
+                    NSRect(
+                        x: startX,
+                        y: bounds.minY,
+                        width: trailingLimit - startX,
+                        height: bounds.height
+                    )
+                ]
+            }
+        }
+
+        private func invalidateWindowDragCursorRects() {
+            guard let window else { return }
+            window.invalidateCursorRects(for: self)
         }
 
         private var isMouseDownOrDragCandidate: Bool {
