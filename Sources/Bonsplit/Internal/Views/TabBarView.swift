@@ -97,6 +97,72 @@ public enum BonsplitTabItemHitRegionRegistry {
     }
 }
 
+private struct TabItemHitRegionView: NSViewRepresentable {
+    func makeNSView(context: Context) -> RegionNSView {
+        RegionNSView()
+    }
+
+    func updateNSView(_ nsView: RegionNSView, context: Context) {}
+
+    final class RegionNSView: NSView, BonsplitTabItemHitRegionProviding {
+        nonisolated(unsafe) private var hitBounds: NSRect = .zero
+
+        override var mouseDownCanMoveWindow: Bool { false }
+
+        deinit {
+            BonsplitTabItemHitRegionRegistry.unregister(self)
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            syncHitBounds()
+            BonsplitTabItemHitRegionRegistry.unregister(self)
+            if window != nil {
+                BonsplitTabItemHitRegionRegistry.register(self)
+            }
+        }
+
+        override func viewDidMoveToSuperview() {
+            super.viewDidMoveToSuperview()
+            if superview == nil {
+                BonsplitTabItemHitRegionRegistry.unregister(self)
+            }
+        }
+
+        override func layout() {
+            super.layout()
+            syncHitBounds()
+        }
+
+        override func setFrameSize(_ newSize: NSSize) {
+            super.setFrameSize(newSize)
+            syncHitBounds()
+        }
+
+        override func setBoundsSize(_ newSize: NSSize) {
+            super.setBoundsSize(newSize)
+            syncHitBounds()
+        }
+
+        override func setBoundsOrigin(_ newOrigin: NSPoint) {
+            super.setBoundsOrigin(newOrigin)
+            syncHitBounds()
+        }
+
+        nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
+            hitBounds.insetBy(dx: -2, dy: -2).contains(localPoint)
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            nil
+        }
+
+        private func syncHitBounds() {
+            hitBounds = bounds
+        }
+    }
+}
+
 private struct SelectedTabFramePreferenceKey: PreferenceKey {
     static let defaultValue: CGRect? = nil
 
@@ -1219,6 +1285,9 @@ struct TabBarView: View {
             onMoveDestination: { destinationId in
                 controller.requestTabMove(toDestination: destinationId, for: TabID(id: tab.id), inPane: pane.id)
             }
+        )
+        .background(
+            TabItemHitRegionView()
         )
         .background(
             GeometryReader { geometry in
@@ -2671,6 +2740,16 @@ struct TabBarDragZoneView: NSViewRepresentable {
 
         private func shouldCaptureHit(at point: NSPoint) -> Bool {
             guard bounds.contains(point) else { return false }
+            if let window,
+               BonsplitTabItemHitRegionRegistry.containsWindowPoint(convert(point, to: nil), in: window) {
+#if DEBUG
+                dlog(
+                    "tab.bar.dragZone.hitTest capture=false reason=registeredTabItem " +
+                    "point=\(point.x.rounded()),\(point.y.rounded())"
+                )
+#endif
+                return false
+            }
             switch hitRegion {
             case .entireBounds:
                 return true

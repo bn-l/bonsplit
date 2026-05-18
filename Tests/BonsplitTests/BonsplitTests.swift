@@ -2650,6 +2650,41 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabBarTrailingEmptyChromeDefersToRegisteredTabItemWhenFrameCacheIsEmpty() throws {
+        let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 30))
+        view.hitRegion = .trailingEmptyChrome(tabFrames: [], reservedTrailingWidth: 48)
+        view.hitTestEventTypeOverride = .leftMouseDown
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 60),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        contentView.addSubview(view)
+        let tabItem = FakeTabItemHitRegionView(frame: NSRect(x: 10, y: 0, width: 90, height: 30))
+        tabItem.tabFrames = [tabItem.bounds]
+        contentView.addSubview(tabItem)
+        window.makeKeyAndOrderFront(nil)
+
+        XCTAssertNil(
+            view.hitTest(NSPoint(x: 40, y: 15)),
+            "A registered pane tab owns its pixels even before the tab-frame preference cache is populated"
+        )
+        XCTAssertIdentical(
+            view.hitTest(NSPoint(x: 140, y: 15)),
+            view,
+            "Empty chrome after the registered tab should still drag the app window"
+        )
+    }
+
+    @MainActor
     func testTabBarDragZoneCursorMarksOnlyMinimalModeWindowDragArea() {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 30))
         view.hitRegion = .trailingEmptyChrome(
