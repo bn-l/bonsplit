@@ -47,6 +47,56 @@ public enum BonsplitTabBarHitRegionRegistry {
     }
 }
 
+public protocol BonsplitTabItemHitRegionProviding: AnyObject {
+    func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool
+}
+
+public enum BonsplitTabItemHitRegionRegistry {
+    private static let lock = NSLock()
+    private static let registeredViews = NSHashTable<NSView>.weakObjects()
+
+    static func register(_ view: NSView) {
+        lock.lock()
+        registeredViews.add(view)
+        lock.unlock()
+    }
+
+    static func unregister(_ view: NSView) {
+        lock.lock()
+        registeredViews.remove(view)
+        lock.unlock()
+    }
+
+    private static func snapshot() -> [NSView] {
+        lock.lock()
+        let views = registeredViews.allObjects
+        lock.unlock()
+        return views
+    }
+
+    private static func isVisibleInHierarchy(_ view: NSView) -> Bool {
+        var current: NSView? = view
+        while let candidate = current {
+            guard !candidate.isHidden, candidate.alphaValue > 0 else { return false }
+            current = candidate.superview
+        }
+        return true
+    }
+
+    public static func containsWindowPoint(_ windowPoint: CGPoint, in window: NSWindow) -> Bool {
+        for view in snapshot() {
+            guard view.window === window,
+                  isVisibleInHierarchy(view),
+                  let provider = view as? BonsplitTabItemHitRegionProviding else { continue }
+            let localPoint = view.convert(windowPoint, from: nil)
+            if provider.containsBonsplitTabItemHit(localPoint: localPoint) {
+                return true
+            }
+        }
+        return false
+    }
+}
+
 private struct SelectedTabFramePreferenceKey: PreferenceKey {
     static let defaultValue: CGRect? = nil
 
@@ -1059,6 +1109,7 @@ struct TabBarView: View {
         }
         .background(TabBarDragAndHoverView(
             isMinimalMode: isMinimalMode,
+            tabFrames: Array(tabFramesInBar.values),
             onDoubleClick: {
                 performNewTerminalSplitButtonAction()
             },
@@ -2264,12 +2315,14 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
 /// this view only receives hits in truly empty space.
 private struct TabBarDragAndHoverView: NSViewRepresentable {
     let isMinimalMode: Bool
+    let tabFrames: [CGRect]
     let onDoubleClick: () -> Bool
     let onHoverChanged: (Bool) -> Void
 
     func makeNSView(context: Context) -> TabBarBackgroundNSView {
         let view = TabBarBackgroundNSView()
         view.isMinimalMode = isMinimalMode
+        view.tabFrames = tabFrames
         view.onDoubleClick = onDoubleClick
         view.onHoverChanged = onHoverChanged
         return view
@@ -2277,12 +2330,14 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
 
     func updateNSView(_ nsView: TabBarBackgroundNSView, context: Context) {
         nsView.isMinimalMode = isMinimalMode
+        nsView.tabFrames = tabFrames
         nsView.onDoubleClick = onDoubleClick
         nsView.onHoverChanged = onHoverChanged
     }
 
-    final class TabBarBackgroundNSView: NSView {
+    final class TabBarBackgroundNSView: NSView, BonsplitTabItemHitRegionProviding {
         var isMinimalMode = false
+        nonisolated(unsafe) var tabFrames: [CGRect] = []
         var onDoubleClick: (() -> Bool)?
         var onHoverChanged: ((Bool) -> Void)?
         private var hoverTrackingArea: NSTrackingArea?
@@ -2297,15 +2352,18 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
             removeLocalMouseMonitor()
             removeWindowObservers()
             BonsplitTabBarHitRegionRegistry.unregister(self)
+            BonsplitTabItemHitRegionRegistry.unregister(self)
         }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             BonsplitTabBarHitRegionRegistry.unregister(self)
+            BonsplitTabItemHitRegionRegistry.unregister(self)
             removeWindowObservers()
             if let window {
                 window.acceptsMouseMovedEvents = true
                 BonsplitTabBarHitRegionRegistry.register(self)
+                BonsplitTabItemHitRegionRegistry.register(self)
                 installWindowObservers()
                 installLocalMouseMonitorIfNeeded()
                 syncHoverStateToCurrentMouseLocation()
@@ -2319,7 +2377,13 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
             super.viewDidMoveToSuperview()
             if superview == nil {
                 BonsplitTabBarHitRegionRegistry.unregister(self)
+                BonsplitTabItemHitRegionRegistry.unregister(self)
             }
+        }
+
+        nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
+            let paddedFrames = tabFrames.map { $0.insetBy(dx: -2, dy: -2) }
+            return paddedFrames.contains { $0.contains(localPoint) }
         }
 
         override func updateTrackingAreas() {
@@ -2353,6 +2417,13 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
             dlog("tab.bar.bg.mouseDown isMinimal=\(isMinimalMode ? 1 : 0) clickCount=\(event.clickCount)")
 #endif
             guard let window else {
+                super.mouseDown(with: event)
+                return
+            }
+            if containsBonsplitTabItemHit(localPoint: convert(event.locationInWindow, from: nil)) {
+#if DEBUG
+                dlog("tab.bar.bg.mouseDown skipped reason=tabItem")
+#endif
                 super.mouseDown(with: event)
                 return
             }

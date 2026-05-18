@@ -27,6 +27,34 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    private final class FakeTabItemHitRegionView: NSView, BonsplitTabItemHitRegionProviding {
+        nonisolated(unsafe) var tabFrames: [CGRect] = []
+
+        deinit {
+            BonsplitTabItemHitRegionRegistry.unregister(self)
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            BonsplitTabItemHitRegionRegistry.unregister(self)
+            if window != nil {
+                BonsplitTabItemHitRegionRegistry.register(self)
+            }
+        }
+
+        override func viewDidMoveToSuperview() {
+            super.viewDidMoveToSuperview()
+            if superview == nil {
+                BonsplitTabItemHitRegionRegistry.unregister(self)
+            }
+        }
+
+        nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
+            tabFrames.contains { $0.contains(localPoint) }
+        }
+    }
+
+    @MainActor
     private final class LayoutProbeView: NSView {
         private(set) var sizeChangeCount = 0
         private(set) var originChangeCount = 0
@@ -751,6 +779,68 @@ final class BonsplitTests: XCTestCase {
         XCTAssertFalse(
             BonsplitTabBarHitRegionRegistry.containsWindowPoint(hitPoint, in: window),
             "Ancestor-hidden tab-bar regions must not keep stealing portal hit testing"
+        )
+    }
+
+    @MainActor
+    func testTabItemHitRegionRegistryTracksOnlyRealTabFrames() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        let tabBar = FakeTabItemHitRegionView(frame: NSRect(x: 20, y: 132, width: 220, height: 30))
+        tabBar.tabFrames = [
+            CGRect(x: 8, y: 0, width: 96, height: 30),
+            CGRect(x: 112, y: 0, width: 80, height: 30)
+        ]
+        contentView.addSubview(tabBar)
+
+        let tabPoint = tabBar.convert(NSPoint(x: 32, y: 12), to: nil)
+        XCTAssertTrue(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(tabPoint, in: window),
+            "Points inside actual tab frames should suppress implicit AppKit window dragging"
+        )
+
+        let emptyChromePoint = tabBar.convert(NSPoint(x: 204, y: 12), to: nil)
+        XCTAssertFalse(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(emptyChromePoint, in: window),
+            "Empty tab-bar chrome should stay available for explicit app-window dragging"
+        )
+    }
+
+    @MainActor
+    func testTabItemHitRegionRegistryIgnoresHiddenProviders() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        let tabBar = FakeTabItemHitRegionView(frame: NSRect(x: 20, y: 132, width: 220, height: 30))
+        tabBar.tabFrames = [CGRect(x: 8, y: 0, width: 96, height: 30)]
+        contentView.addSubview(tabBar)
+
+        let tabPoint = tabBar.convert(NSPoint(x: 32, y: 12), to: nil)
+        XCTAssertTrue(BonsplitTabItemHitRegionRegistry.containsWindowPoint(tabPoint, in: window))
+
+        tabBar.isHidden = true
+        XCTAssertFalse(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(tabPoint, in: window),
+            "Hidden tab providers must not suppress app-window dragging"
         )
     }
 
