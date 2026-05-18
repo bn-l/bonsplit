@@ -422,6 +422,24 @@ final class BonsplitTests: XCTestCase {
         XCTAssertTrue(layout.splitButtonLaneOverflowsViewport)
     }
 
+    func testTabBarLayoutUsesTrailingWhitespaceBeforeClippingSplitButtons() {
+        let measuredWidth = TabBarStyling.splitButtonsBackdropWidth(buttonCount: 10)
+        let layout = TabBarLayout(
+            tabBarHeight: 28,
+            availableWidth: 930,
+            tabContentWidthExcludingSplitButtonLane: 300,
+            splitButtonCount: 10,
+            splitButtonLaneVisible: true,
+            reservesSplitButtonLane: true,
+            measuredSplitButtonLaneWidth: measuredWidth
+        )
+
+        XCTAssertEqual(layout.maximumSplitButtonLaneWidth, 630)
+        XCTAssertEqual(layout.visibleSplitButtonLaneWidth, measuredWidth)
+        XCTAssertEqual(layout.trailingTabContentInset, measuredWidth)
+        XCTAssertFalse(layout.splitButtonLaneOverflowsViewport)
+    }
+
     func testTabBarLayoutKeepsMeasuredLaneWhenItFitsQuarterOfAvailableWidth() {
         let layout = TabBarLayout(
             tabBarHeight: 28,
@@ -3105,9 +3123,9 @@ final class BonsplitTests: XCTestCase {
             showSplitButtons: true,
             size: size,
             configurePane: { pane in
-                let selected = TabItem(title: "", icon: nil)
-                pane.tabs = [selected]
-                pane.selectedTabId = selected.id
+                let tabs = (0..<8).map { _ in TabItem(title: "", icon: nil) }
+                pane.tabs = tabs
+                pane.selectedTabId = tabs.first?.id
             }
         ) { hostingView in
             maximumBrightness(
