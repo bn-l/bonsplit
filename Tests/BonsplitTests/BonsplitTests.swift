@@ -1264,6 +1264,28 @@ final class BonsplitTests: XCTestCase {
         XCTAssertLessThan(hoverAlpha, 0.12)
     }
 
+    func testSharedBackdropActiveTabBackgroundIsClear() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(
+                backgroundHex: "#272822",
+                tabBarBackgroundHex: "#00000000",
+                splitButtonBackdropHex: "#00000000",
+                paneBackgroundHex: "#00000000"
+            ),
+            usesSharedBackdrop: true
+        )
+        let active = NSColor(TabBarColors.activeTabBackground(for: appearance)).usingColorSpace(.sRGB)!
+
+        var alpha: CGFloat = 1
+        active.getRed(nil, green: nil, blue: nil, alpha: &alpha)
+
+        XCTAssertLessThan(
+            alpha,
+            0.01,
+            "Shared-backdrop selected tabs should rely on the active indicator instead of a hover-like fill"
+        )
+    }
+
     func testSplitActionPressedStateUsesHigherContrast() {
         let appearance = BonsplitConfiguration.Appearance(
             chromeColors: .init(backgroundHex: "#272822")
@@ -1714,6 +1736,15 @@ final class BonsplitTests: XCTestCase {
             "A short-titled tab must own the full configured visible tab width so minimal-mode drags do not become window drags"
         )
 
+        let topEdgeTabPoint = hostingView.convert(
+            NSPoint(x: appearance.tabMinWidth - 20, y: appearance.tabBarHeight + 3),
+            to: nil
+        )
+        XCTAssertTrue(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(topEdgeTabPoint, in: window),
+            "A tab's horizontal lane must own near-titlebar-edge drags so minimal-mode top-edge tab drags do not become window drags"
+        )
+
         let emptyChromePoint = hostingView.convert(
             NSPoint(x: appearance.tabMinWidth + 30, y: verticalCenter),
             to: nil
@@ -1721,6 +1752,15 @@ final class BonsplitTests: XCTestCase {
         XCTAssertFalse(
             BonsplitTabItemHitRegionRegistry.containsWindowPoint(emptyChromePoint, in: window),
             "Empty tab-strip chrome after the configured tab remains available for app-window dragging"
+        )
+
+        let topEdgeEmptyChromePoint = hostingView.convert(
+            NSPoint(x: appearance.tabMinWidth + 30, y: appearance.tabBarHeight + 3),
+            to: nil
+        )
+        XCTAssertFalse(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(topEdgeEmptyChromePoint, in: window),
+            "Near-titlebar-edge empty chrome after the tab should remain available for app-window dragging"
         )
     }
 
