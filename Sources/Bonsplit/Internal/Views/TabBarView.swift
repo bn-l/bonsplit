@@ -1277,7 +1277,7 @@ struct TabBarView: View {
                 }
             },
             onZoomToggle: {
-                _ = splitViewController.togglePaneZoom(pane.id)
+                _ = controller.requestTabZoomToggle(for: TabID(id: tab.id), inPane: pane.id)
             },
             onContextAction: { action in
                 controller.requestTabContextAction(action, for: TabID(id: tab.id), inPane: pane.id)

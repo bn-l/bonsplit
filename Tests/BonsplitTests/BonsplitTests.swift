@@ -1351,6 +1351,42 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testRequestTabZoomToggleUsesHostHandler() {
+        let controller = BonsplitController()
+        let pane = controller.focusedPaneId!
+        let tabId = controller.createTab(title: "Zoom target")!
+        var requestedTabId: TabID?
+        var requestedPaneId: PaneID?
+        controller.onTabZoomToggleRequest = { tabId, paneId in
+            requestedTabId = tabId
+            requestedPaneId = paneId
+            return true
+        }
+
+        XCTAssertTrue(controller.requestTabZoomToggle(for: tabId, inPane: pane))
+
+        XCTAssertEqual(requestedTabId, tabId)
+        XCTAssertEqual(requestedPaneId, pane)
+        XCTAssertNil(controller.zoomedPaneId)
+    }
+
+    @MainActor
+    func testRequestTabZoomToggleFallsBackToInternalZoom() {
+        let controller = BonsplitController()
+        let pane = controller.focusedPaneId!
+        let tabId = controller.createTab(title: "Zoom target")!
+        guard controller.splitPane(pane, orientation: .horizontal) != nil else {
+            return XCTFail("Expected splitPane to create a new pane")
+        }
+
+        XCTAssertTrue(controller.requestTabZoomToggle(for: tabId, inPane: pane))
+        XCTAssertEqual(controller.zoomedPaneId, pane)
+
+        XCTAssertTrue(controller.requestTabZoomToggle(for: tabId, inPane: pane))
+        XCTAssertNil(controller.zoomedPaneId)
+    }
+
+    @MainActor
     func testSplitClearsExistingPaneZoom() {
         let controller = BonsplitController()
         guard let originalPane = controller.focusedPaneId else {
