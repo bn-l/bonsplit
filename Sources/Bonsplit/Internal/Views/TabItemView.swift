@@ -210,6 +210,11 @@ struct TabItemView: View {
         .onTapGesture {
             onSelect()
         }
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded {
+                onZoomToggle()
+            }
+        )
         .onHover { hovering in
             withTransaction(Transaction(animation: nil)) {
                 isHovered = hovering
