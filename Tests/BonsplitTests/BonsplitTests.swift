@@ -3458,9 +3458,9 @@ final class BonsplitTests: XCTestCase {
             maximumBrightness(
                 in: hostingView,
                 sampleRect: NSRect(
-                    x: 100,
+                    x: size.width - splitButtonLaneWidth - 16,
                     y: 5,
-                    width: size.width - splitButtonLaneWidth - 108,
+                    width: 8,
                     height: size.height - 10
                 )
             )
