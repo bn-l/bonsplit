@@ -1599,6 +1599,65 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testShortConfiguredTabOwnsFullConfiguredHitWidth() {
+        let appearance = BonsplitConfiguration.Appearance(
+            tabMinWidth: 140,
+            tabMaxWidth: 220,
+            splitButtons: []
+        )
+        let controller = BonsplitController(configuration: BonsplitConfiguration(appearance: appearance))
+        let pane = controller.internalController.rootNode.allPanes.first!
+        let tab = TabItem(title: "~", icon: "terminal.fill")
+        pane.tabs = [tab]
+        pane.selectedTabId = tab.id
+
+        let hostingView = NSHostingView(
+            rootView: TabBarView(pane: pane, isFocused: true, showSplitButtons: true)
+                .environment(controller)
+                .environment(controller.internalController)
+        )
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 60),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        hostingView.frame = contentView.bounds
+        hostingView.autoresizingMask = [.width, .height]
+        contentView.addSubview(hostingView)
+
+        window.makeKeyAndOrderFront(nil)
+        contentView.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        contentView.layoutSubtreeIfNeeded()
+
+        let verticalCenter = appearance.tabBarHeight / 2
+        let configuredTabPoint = hostingView.convert(
+            NSPoint(x: appearance.tabMinWidth - 20, y: verticalCenter),
+            to: nil
+        )
+        XCTAssertTrue(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(configuredTabPoint, in: window),
+            "A short-titled tab must own the full configured visible tab width so minimal-mode drags do not become window drags"
+        )
+
+        let emptyChromePoint = hostingView.convert(
+            NSPoint(x: appearance.tabMinWidth + 30, y: verticalCenter),
+            to: nil
+        )
+        XCTAssertFalse(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(emptyChromePoint, in: window),
+            "Empty tab-strip chrome after the configured tab remains available for app-window dragging"
+        )
+    }
+
+    @MainActor
     func testTabBarVisibilityDefaultsToAlways() throws {
         XCTAssertEqual(BonsplitConfiguration().tabBarVisibility, .always)
         XCTAssertTrue(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 0, visibility: .always)))
@@ -1949,6 +2008,15 @@ final class BonsplitTests: XCTestCase {
         )
     }
 
+    func testTabWidthRangeUsesAppearanceMinimum() {
+        let range = TabItemStyling.tabWidthRange(
+            for: BonsplitConfiguration.Appearance(tabMinWidth: 140, tabMaxWidth: 220)
+        )
+
+        XCTAssertEqual(range.lowerBound, 140)
+        XCTAssertEqual(range.upperBound, 220)
+    }
+
     func testActiveTabIndicatorHeightIsOneAndHalfPixels() {
         XCTAssertEqual(TabBarMetrics.activeIndicatorHeight, 1.5)
     }
@@ -1960,7 +2028,11 @@ final class BonsplitTests: XCTestCase {
             return
         }
 
-        XCTAssertEqual(width, TabBarMetrics.tabMinWidth - 1, accuracy: 0.5)
+        XCTAssertEqual(
+            width,
+            BonsplitConfiguration.Appearance.default.tabMinWidth - TabBarMetrics.activeIndicatorTrailingInset,
+            accuracy: 0.5
+        )
     }
 
     @MainActor
@@ -2984,7 +3056,7 @@ final class BonsplitTests: XCTestCase {
     @MainActor
     private func renderedTabBarIndicatorWidth(isFocused: Bool) -> CGFloat? {
         renderedTabBarValue(isFocused: isFocused) { hostingView in
-            let sampleRect = NSRect(x: 0, y: 0, width: 80, height: 4)
+            let sampleRect = NSRect(x: 0, y: 0, width: 180, height: 4)
             return highSaturationWidth(in: hostingView, sampleRect: sampleRect)
         }
     }
@@ -3485,7 +3557,7 @@ final class BonsplitTests: XCTestCase {
                 pane.selectedTabId = selected.id
             }
         ) { hostingView in
-            let separatorX = TabBarMetrics.tabMinWidth - 0.5
+            let separatorX = BonsplitConfiguration.Appearance.default.tabMinWidth - 0.5
             guard let top = renderedColorInViewCoordinates(in: hostingView, at: NSPoint(x: separatorX, y: 4))?
                 .usingColorSpace(.sRGB)?
                 .alphaComponent,

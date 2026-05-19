@@ -34,6 +34,12 @@ enum TabItemStyling {
         isHovered && !isSelected
     }
 
+    static func tabWidthRange(for appearance: BonsplitConfiguration.Appearance) -> ClosedRange<CGFloat> {
+        let minimum = max(1, appearance.tabMinWidth)
+        let maximum = max(minimum, appearance.tabMaxWidth)
+        return minimum...maximum
+    }
+
     static func resolvedFaviconImage(existing: NSImage?, incomingData: Data?) -> NSImage? {
         guard let incomingData else { return nil }
         if let decoded = NSImage(data: incomingData) {
@@ -178,8 +184,8 @@ struct TabItemView: View {
         }
         .padding(.horizontal, TabBarMetrics.tabHorizontalPadding)
         .frame(
-            minWidth: TabBarMetrics.tabMinWidth,
-            maxWidth: TabBarMetrics.tabMaxWidth,
+            minWidth: tabWidthRange.lowerBound,
+            maxWidth: tabWidthRange.upperBound,
             minHeight: tabHeight,
             maxHeight: tabHeight
         )
@@ -232,6 +238,10 @@ struct TabItemView: View {
 
     private var showsShortcutHint: Bool {
         allowsShortcutHints && (showsControlShortcutHint || alwaysShowShortcutHints) && shortcutHintLabel != nil
+    }
+
+    private var tabWidthRange: ClosedRange<CGFloat> {
+        TabItemStyling.tabWidthRange(for: appearance)
     }
 
     private var shortcutHintSlotWidth: CGFloat {
@@ -358,8 +368,10 @@ struct TabItemView: View {
     @ViewBuilder
     private var tabBackground: some View {
         ZStack(alignment: .top) {
-            // Background fill (hover)
-            if TabItemStyling.shouldShowHoverBackground(isHovered: isHovered, isSelected: isSelected) {
+            if isSelected {
+                Rectangle()
+                    .fill(TabBarColors.activeTabBackground(for: appearance))
+            } else if TabItemStyling.shouldShowHoverBackground(isHovered: isHovered, isSelected: isSelected) {
                 Rectangle()
                     .fill(TabBarColors.hoveredTabBackground(for: appearance))
             } else {
