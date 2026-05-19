@@ -478,7 +478,7 @@ struct TabBarLayout: Equatable {
     }
 
     var maximumSplitButtonLaneWidth: CGFloat {
-        guard availableWidth > 0 else { return fullSplitButtonLaneWidth }
+        guard availableWidth > 0 else { return 0 }
         let fractionLimit = availableWidth * TabBarStyling.maximumSplitButtonLaneWidthFraction
         return max(fractionLimit, trailingWhitespaceBeforeSplitButtonLane)
     }

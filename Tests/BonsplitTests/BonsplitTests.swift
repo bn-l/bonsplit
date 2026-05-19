@@ -408,6 +408,7 @@ final class BonsplitTests: XCTestCase {
             + (3 * TabBarStyling.splitButtonsSpacing)
         let layout = TabBarLayout(
             tabBarHeight: 28,
+            availableWidth: 800,
             splitButtonCount: 4,
             splitButtonLaneVisible: true,
             reservesSplitButtonLane: true,
