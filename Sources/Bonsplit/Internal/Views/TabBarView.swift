@@ -1494,6 +1494,12 @@ struct TabBarView: View {
     private var splitButtonChrome: some View {
         if shouldRenderSplitButtons {
             splitButtons
+                .frame(width: splitButtonsBackdropWidth, height: tabBarHeight, alignment: .trailing)
+                .mask {
+                    Rectangle()
+                        .frame(width: splitButtonsBackdropWidth, height: tabBarHeight)
+                }
+                .clipped()
                 .saturation(tabBarSaturation)
                 .opacity(shouldShowSplitButtons ? 1 : 0)
                 .allowsHitTesting(shouldShowSplitButtons)

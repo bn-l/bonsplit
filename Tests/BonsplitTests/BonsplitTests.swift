@@ -3600,6 +3600,7 @@ final class BonsplitTests: XCTestCase {
         return renderedTabBarValue(
             isFocused: true,
             appearance: appearance,
+            size: NSSize(width: 320, height: TabBarMetrics.barHeight),
             configurePane: { pane in
                 let leading = TabItem(title: "", icon: nil)
                 let selected = TabItem(title: "", icon: nil)
