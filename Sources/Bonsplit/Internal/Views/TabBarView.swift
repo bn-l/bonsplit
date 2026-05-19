@@ -1656,6 +1656,7 @@ struct TabBarView: View {
         }
         .frame(width: laneWidth, height: tabBarHeight, alignment: .trailing)
         .contentShape(Rectangle())
+        .compositingGroup()
         .clipped()
     }
 
