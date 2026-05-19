@@ -423,6 +423,7 @@ final class BonsplitTests: XCTestCase {
     func testTabBarLayoutExpandsForMeasuredSplitButtonLaneWidth() {
         let layout = TabBarLayout(
             tabBarHeight: 28,
+            availableWidth: 800,
             splitButtonCount: 4,
             splitButtonLaneVisible: true,
             reservesSplitButtonLane: true,
@@ -448,6 +449,22 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(layout.visibleSplitButtonLaneWidth, 60)
         XCTAssertEqual(layout.trailingTabContentInset, 60)
         XCTAssertTrue(layout.splitButtonLaneOverflowsViewport)
+    }
+
+    func testTabBarLayoutDoesNotTreatZeroTabContentAsTrailingWhitespace() {
+        let layout = TabBarLayout(
+            tabBarHeight: 28,
+            availableWidth: 240,
+            tabContentWidthExcludingSplitButtonLane: 0,
+            splitButtonCount: 12,
+            splitButtonLaneVisible: true,
+            reservesSplitButtonLane: true,
+            measuredSplitButtonLaneWidth: 400
+        )
+
+        XCTAssertEqual(layout.maximumSplitButtonLaneWidth, 60)
+        XCTAssertEqual(layout.visibleSplitButtonLaneWidth, 60)
+        XCTAssertEqual(layout.trailingTabContentInset, 60)
     }
 
     func testTabBarLayoutUsesTrailingWhitespaceBeforeClippingSplitButtons() {
@@ -641,6 +658,56 @@ final class BonsplitTests: XCTestCase {
             indicatorFrame?.maxX ?? 0,
             239,
             accuracy: 0.001
+        )
+    }
+
+    func testTabBarSelectedChromeFrameFollowsCurrentSelection() {
+        let firstTabId = UUID()
+        let secondTabId = UUID()
+        let layout = TabBarLayout(
+            tabBarHeight: 28,
+            splitButtonCount: 0,
+            splitButtonLaneVisible: false,
+            reservesSplitButtonLane: false
+        )
+        let frames = [
+            firstTabId: CGRect(x: 12, y: 0, width: 120, height: 28),
+            secondTabId: CGRect(x: 144, y: 0, width: 96, height: 28),
+        ]
+        let totalWidth: CGFloat = 300
+
+        let firstSelectedFrame = TabBarStyling.selectedTabFrame(
+            selectedTabId: firstTabId,
+            tabFrames: frames
+        )
+        let secondSelectedFrame = TabBarStyling.selectedTabFrame(
+            selectedTabId: secondTabId,
+            tabFrames: frames
+        )
+        let firstIndicatorFrame = layout.selectedIndicatorFrame(
+            selectedTabFrame: firstSelectedFrame,
+            totalWidth: totalWidth
+        )
+        let secondIndicatorFrame = layout.selectedIndicatorFrame(
+            selectedTabFrame: secondSelectedFrame,
+            totalWidth: totalWidth
+        )
+
+        XCTAssertEqual(firstIndicatorFrame?.minX, frames[firstTabId]?.minX)
+        XCTAssertEqual(
+            secondIndicatorFrame?.minX,
+            frames[secondTabId]?.minX,
+            "Selected tab chrome must be derived from the current selected tab id, not a cached frame from a previous selection."
+        )
+        let nilSelectedFrame = TabBarStyling.selectedTabFrame(
+            selectedTabId: nil,
+            tabFrames: frames
+        )
+        XCTAssertNil(
+            layout.selectedIndicatorFrame(
+                selectedTabFrame: nilSelectedFrame,
+                totalWidth: totalWidth
+            )
         )
     }
 
@@ -3383,7 +3450,7 @@ final class BonsplitTests: XCTestCase {
             showSplitButtons: true,
             size: size,
             configurePane: { pane in
-                let tabs = (0..<8).map { _ in TabItem(title: "", icon: nil) }
+                let tabs = (0..<16).map { _ in TabItem(title: "", icon: nil) }
                 pane.tabs = tabs
                 pane.selectedTabId = tabs.first?.id
             }
@@ -3391,9 +3458,9 @@ final class BonsplitTests: XCTestCase {
             maximumBrightness(
                 in: hostingView,
                 sampleRect: NSRect(
-                    x: 100,
+                    x: size.width - splitButtonLaneWidth - 16,
                     y: 5,
-                    width: size.width - splitButtonLaneWidth - 108,
+                    width: 8,
                     height: size.height - 10
                 )
             )
@@ -3550,6 +3617,7 @@ final class BonsplitTests: XCTestCase {
         return renderedTabBarValue(
             isFocused: true,
             appearance: appearance,
+            size: NSSize(width: 320, height: TabBarMetrics.barHeight),
             configurePane: { pane in
                 let leading = TabItem(title: "", icon: nil)
                 let selected = TabItem(title: "", icon: nil)

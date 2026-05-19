@@ -163,16 +163,6 @@ private struct TabItemHitRegionView: NSViewRepresentable {
     }
 }
 
-private struct SelectedTabFramePreferenceKey: PreferenceKey {
-    static let defaultValue: CGRect? = nil
-
-    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
-        if let next = nextValue() {
-            value = next
-        }
-    }
-}
-
 private struct TabFramePreferenceKey: PreferenceKey {
     static let defaultValue: [UUID: CGRect] = [:]
 
@@ -367,6 +357,14 @@ enum TabBarStyling {
         SplitActionButtonImageCache.shared.image(for: data)
     }
 
+    static func selectedTabFrame(
+        selectedTabId: UUID?,
+        tabFrames: [UUID: CGRect]
+    ) -> CGRect? {
+        guard let selectedTabId else { return nil }
+        return tabFrames[selectedTabId]
+    }
+
     enum ScrollTarget: Equatable {
         case leading
         case selectedTab(UUID)
@@ -480,14 +478,15 @@ struct TabBarLayout: Equatable {
     }
 
     var maximumSplitButtonLaneWidth: CGFloat {
-        guard availableWidth > 0 else { return fullSplitButtonLaneWidth }
+        guard availableWidth > 0 else { return 0 }
         let fractionLimit = availableWidth * TabBarStyling.maximumSplitButtonLaneWidthFraction
         return max(fractionLimit, trailingWhitespaceBeforeSplitButtonLane)
     }
 
     var trailingWhitespaceBeforeSplitButtonLane: CGFloat {
         guard availableWidth > 0,
-              let tabContentWidthExcludingSplitButtonLane else {
+              let tabContentWidthExcludingSplitButtonLane,
+              tabContentWidthExcludingSplitButtonLane > 0 else {
             return 0
         }
         return max(0, availableWidth - tabContentWidthExcludingSplitButtonLane)
@@ -891,7 +890,6 @@ struct TabBarView: View {
     @State private var contentWidth: CGFloat = 0
     @State private var tabContentWidthExcludingSplitButtonLane: CGFloat?
     @State private var containerWidth: CGFloat = 0
-    @State private var selectedTabFrameInBar: CGRect?
     @State private var tabFramesInBar: [UUID: CGRect] = [:]
     @State private var measuredSplitButtonLaneWidth: CGFloat = 0
     @State private var splitButtonScrollOffset: CGFloat = 0
@@ -977,6 +975,13 @@ struct TabBarView: View {
 
     private var trailingTabContentInset: CGFloat {
         tabBarLayout.trailingTabContentInset
+    }
+
+    private var selectedTabFrameInBar: CGRect? {
+        TabBarStyling.selectedTabFrame(
+            selectedTabId: pane.selectedTabId,
+            tabFrames: tabFramesInBar
+        )
     }
 
     private var leadingScrollAnchorId: String {
@@ -1147,7 +1152,7 @@ struct TabBarView: View {
             splitButtonBackdropChrome
                 .opacity(shouldShowSplitButtons ? 1 : 0)
                 .allowsHitTesting(false)
-                .animation(.easeInOut(duration: 0.14), value: shouldShowSplitButtons)
+                .tabBarButtonAnimationsDisabled()
         }
         .overlay(maskedTabBarBottomSeparatorChrome)
         .overlay {
@@ -1179,10 +1184,10 @@ struct TabBarView: View {
             onDoubleClick: {
                 performNewTerminalSplitButtonAction()
             },
-            onHoverChanged: { isHoveringTabBar = $0 }
+            onHoverChanged: { updateTabBarHover($0) }
         ))
         .overlay(
-            TabBarHoverTrackingView { isHoveringTabBar = $0 }
+            TabBarHoverTrackingView { updateTabBarHover($0) }
         )
         .overlay(
             TabBarManualReorderTrackingView(
@@ -1217,11 +1222,10 @@ struct TabBarView: View {
         .onAppear {
             controlKeyMonitor.start()
         }
-        .onPreferenceChange(SelectedTabFramePreferenceKey.self) { frame in
-            selectedTabFrameInBar = frame
-        }
         .onPreferenceChange(TabFramePreferenceKey.self) { frames in
-            tabFramesInBar = frames
+            withTransaction(Transaction(animation: nil)) {
+                tabFramesInBar = frames
+            }
         }
         .onPreferenceChange(SplitButtonLaneWidthPreferenceKey.self) { width in
             measuredSplitButtonLaneWidth = width
@@ -1232,6 +1236,12 @@ struct TabBarView: View {
     }
 
     // MARK: - Tab Item
+
+    private func updateTabBarHover(_ hovering: Bool) {
+        withTransaction(Transaction(animation: nil)) {
+            isHoveringTabBar = hovering
+        }
+    }
 
     @ViewBuilder
     private func tabItem(for tab: TabItem, at index: Int) -> some View {
@@ -1293,10 +1303,6 @@ struct TabBarView: View {
             GeometryReader { geometry in
                 let frame = geometry.frame(in: .named("tabBar"))
                 Color.clear
-                    .preference(
-                        key: SelectedTabFramePreferenceKey.self,
-                        value: pane.selectedTabId == tab.id ? frame : nil
-                    )
                     .preference(
                         key: TabFramePreferenceKey.self,
                         value: [tab.id: frame]
@@ -1489,11 +1495,17 @@ struct TabBarView: View {
     private var splitButtonChrome: some View {
         if shouldRenderSplitButtons {
             splitButtons
+                .frame(width: splitButtonsBackdropWidth, height: tabBarHeight, alignment: .trailing)
+                .mask {
+                    Rectangle()
+                        .frame(width: splitButtonsBackdropWidth, height: tabBarHeight)
+                }
+                .clipped()
                 .saturation(tabBarSaturation)
                 .opacity(shouldShowSplitButtons ? 1 : 0)
                 .allowsHitTesting(shouldShowSplitButtons)
-            .frame(height: tabBarHeight, alignment: .trailing)
-            .animation(.easeInOut(duration: 0.14), value: shouldShowSplitButtons)
+                .frame(height: tabBarHeight, alignment: .trailing)
+                .tabBarButtonAnimationsDisabled()
         }
     }
 
@@ -1645,6 +1657,7 @@ struct TabBarView: View {
         }
         .frame(width: laneWidth, height: tabBarHeight, alignment: .trailing)
         .contentShape(Rectangle())
+        .compositingGroup()
         .clipped()
     }
 
@@ -2001,7 +2014,7 @@ private struct SplitActionButtonStyle: ButtonStyle {
             .contentShape(Rectangle())
             .foregroundStyle(TabBarColors.splitActionIcon(for: appearance, isPressed: configuration.isPressed))
             .opacity(configuration.isPressed ? 0.72 : 1.0)
-            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+            .tabBarButtonAnimationsDisabled()
     }
 }
 
