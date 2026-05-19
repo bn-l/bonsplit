@@ -485,7 +485,8 @@ struct TabBarLayout: Equatable {
 
     var trailingWhitespaceBeforeSplitButtonLane: CGFloat {
         guard availableWidth > 0,
-              let tabContentWidthExcludingSplitButtonLane else {
+              let tabContentWidthExcludingSplitButtonLane,
+              tabContentWidthExcludingSplitButtonLane > 0 else {
             return 0
         }
         return max(0, availableWidth - tabContentWidthExcludingSplitButtonLane)

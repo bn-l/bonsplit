@@ -451,6 +451,22 @@ final class BonsplitTests: XCTestCase {
         XCTAssertTrue(layout.splitButtonLaneOverflowsViewport)
     }
 
+    func testTabBarLayoutDoesNotTreatZeroTabContentAsTrailingWhitespace() {
+        let layout = TabBarLayout(
+            tabBarHeight: 28,
+            availableWidth: 240,
+            tabContentWidthExcludingSplitButtonLane: 0,
+            splitButtonCount: 12,
+            splitButtonLaneVisible: true,
+            reservesSplitButtonLane: true,
+            measuredSplitButtonLaneWidth: 400
+        )
+
+        XCTAssertEqual(layout.maximumSplitButtonLaneWidth, 60)
+        XCTAssertEqual(layout.visibleSplitButtonLaneWidth, 60)
+        XCTAssertEqual(layout.trailingTabContentInset, 60)
+    }
+
     func testTabBarLayoutUsesTrailingWhitespaceBeforeClippingSplitButtons() {
         let measuredWidth = TabBarStyling.splitButtonsBackdropWidth(buttonCount: 10)
         let layout = TabBarLayout(
