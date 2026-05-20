@@ -98,7 +98,9 @@ public enum BonsplitTabItemHitRegionRegistry {
 }
 
 enum BonsplitTabItemHitTesting {
-    static let horizontalSlop: CGFloat = 2
+    // Hit-test rect is intentionally larger than visual chrome. Do not bump
+    // visible tab padding/width to fix drag affordance; see cmux #4290 / #4433.
+    static let horizontalSlop: CGFloat = 10
     static let verticalSlop: CGFloat = 6
 
     static func containsTabLaneHit(
@@ -2797,7 +2799,9 @@ struct TabBarDragZoneView: NSViewRepresentable {
                 guard isMouseDownOrDragCandidate else { return false }
                 let trailingLimit = bounds.maxX - max(0, reservedTrailingWidth)
                 guard point.x < trailingLimit else { return false }
-                let paddedFrames = tabFrames.map { $0.insetBy(dx: -2, dy: -2) }
+                let paddedFrames = tabFrames.map {
+                    $0.insetBy(dx: -BonsplitTabItemHitTesting.horizontalSlop, dy: -2)
+                }
                 guard !paddedFrames.contains(where: { $0.contains(point) }) else { return false }
                 let startX = paddedFrames.map(\.maxX).max() ?? bounds.minX
                 return point.x >= startX
@@ -2814,7 +2818,9 @@ struct TabBarDragZoneView: NSViewRepresentable {
                 let trailingLimit = bounds.maxX - max(0, reservedTrailingWidth)
                 guard trailingLimit > bounds.minX else { return [] }
 
-                let paddedFrames = tabFrames.map { $0.insetBy(dx: -2, dy: -2) }
+                let paddedFrames = tabFrames.map {
+                    $0.insetBy(dx: -BonsplitTabItemHitTesting.horizontalSlop, dy: -2)
+                }
                 let startX = max(bounds.minX, paddedFrames.map(\.maxX).max() ?? bounds.minX)
                 guard trailingLimit > startX else { return [] }
 
