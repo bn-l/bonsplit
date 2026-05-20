@@ -41,7 +41,7 @@ enum TabItemStyling {
     }
 
     static func tabWidthRange(for appearance: BonsplitConfiguration.Appearance) -> ClosedRange<CGFloat> {
-        let minimum = max(1, appearance.tabMinWidth)
+        let minimum = max(1, TabBarMetrics.tabMinWidth)
         let maximum = max(minimum, appearance.tabMaxWidth)
         return minimum...maximum
     }
@@ -200,7 +200,7 @@ struct TabItemView: View {
         )
         .background(tabBackground.saturation(saturation))
         .tabControlShortcutHintVisibilityAnimation(value: showsShortcutHint)
-        .contentShape(Rectangle())
+        .contentShape(Rectangle().inset(by: -BonsplitTabItemHitTesting.horizontalSlop))
         // Middle click to close (macOS convention).
         // Uses an AppKit event monitor so it doesn't interfere with left click selection or drag/reorder.
         .background(MiddleClickMonitorView(onMiddleClick: {
