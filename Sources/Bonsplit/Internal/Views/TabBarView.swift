@@ -97,6 +97,25 @@ public enum BonsplitTabItemHitRegionRegistry {
     }
 }
 
+enum BonsplitTabItemHitTesting {
+    static let horizontalSlop: CGFloat = 2
+    static let verticalSlop: CGFloat = 6
+
+    static func containsTabLaneHit(
+        localPoint: NSPoint,
+        tabFrames: [CGRect],
+        bounds: NSRect
+    ) -> Bool {
+        guard bounds.insetBy(dx: 0, dy: -verticalSlop).contains(localPoint) else {
+            return false
+        }
+        return tabFrames.contains { frame in
+            localPoint.x >= frame.minX - horizontalSlop
+                && localPoint.x <= frame.maxX + horizontalSlop
+        }
+    }
+}
+
 private struct TabItemHitRegionView: NSViewRepresentable {
     func makeNSView(context: Context) -> RegionNSView {
         RegionNSView()
@@ -150,7 +169,12 @@ private struct TabItemHitRegionView: NSViewRepresentable {
         }
 
         nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
-            hitBounds.insetBy(dx: -2, dy: -2).contains(localPoint)
+            hitBounds
+                .insetBy(
+                    dx: -BonsplitTabItemHitTesting.horizontalSlop,
+                    dy: -BonsplitTabItemHitTesting.verticalSlop
+                )
+                .contains(localPoint)
         }
 
         override func hitTest(_ point: NSPoint) -> NSView? {
@@ -2464,8 +2488,11 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
         }
 
         nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
-            let paddedFrames = tabFrames.map { $0.insetBy(dx: -2, dy: -2) }
-            return paddedFrames.contains { $0.contains(localPoint) }
+            BonsplitTabItemHitTesting.containsTabLaneHit(
+                localPoint: localPoint,
+                tabFrames: tabFrames,
+                bounds: bounds
+            )
         }
 
         override func updateTrackingAreas() {
