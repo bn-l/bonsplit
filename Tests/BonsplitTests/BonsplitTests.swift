@@ -1862,6 +1862,37 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testLoadingSpinnerResolvesDynamicColorWithEffectiveAppearance() throws {
+        let previousAppearance = NSApplication.shared.appearance
+        NSApplication.shared.appearance = NSAppearance(named: .aqua)
+        defer { NSApplication.shared.appearance = previousAppearance }
+
+        let spinner = TabLoadingSpinnerLayerView(frame: NSRect(x: 4, y: 4, width: 12, height: 12))
+        spinner.configure(size: 12, color: .labelColor)
+
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 20, height: 20))
+        let window = NSWindow(
+            contentRect: contentView.bounds,
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.contentView = contentView
+        contentView.addSubview(spinner)
+        contentView.layoutSubtreeIfNeeded()
+        spinner.layoutSubtreeIfNeeded()
+
+        try withExtendedLifetime(window) {
+            let cgColor = try XCTUnwrap(spinner.arcStrokeColorForTesting)
+            let color = try XCTUnwrap(NSColor(cgColor: cgColor)?.usingColorSpace(.sRGB))
+            XCTAssertGreaterThan(color.redComponent, 0.9)
+            XCTAssertGreaterThan(color.greenComponent, 0.9)
+            XCTAssertGreaterThan(color.blueComponent, 0.9)
+        }
+    }
+
+    @MainActor
     func testLoadingSpinnerStopsCoreAnimationWhenRemovedFromWindow() throws {
         let spinner = TabLoadingSpinnerLayerView(frame: NSRect(x: 4, y: 4, width: 12, height: 12))
         spinner.configure(size: 12, color: .labelColor)
