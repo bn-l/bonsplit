@@ -1,6 +1,7 @@
 import XCTest
 @testable import Bonsplit
 import AppKit
+import QuartzCore
 import SwiftUI
 
 final class BonsplitTests: XCTestCase {
@@ -1820,6 +1821,54 @@ final class BonsplitTests: XCTestCase {
         let existing = NSImage(size: NSSize(width: 16, height: 16))
         let resolved = TabItemStyling.resolvedFaviconImage(existing: existing, incomingData: nil)
         XCTAssertNil(resolved)
+    }
+
+    @MainActor
+    func testLoadingSpinnerUsesCoreAnimationRotationLayer() throws {
+        let spinner = TabLoadingSpinnerLayerView(frame: NSRect(x: 4, y: 4, width: 12, height: 12))
+        spinner.configure(size: 12, color: .labelColor)
+
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 20, height: 20))
+        let window = NSWindow(
+            contentRect: contentView.bounds,
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = contentView
+        contentView.addSubview(spinner)
+        contentView.layoutSubtreeIfNeeded()
+        spinner.layoutSubtreeIfNeeded()
+
+        let animation = try XCTUnwrap(
+            spinner.activeRotationAnimationForTesting as? CABasicAnimation
+        )
+        XCTAssertEqual(animation.keyPath, "transform.rotation.z")
+        XCTAssertEqual(animation.duration, TabLoadingSpinnerLayerView.rotationDuration, accuracy: 0.001)
+        XCTAssertEqual(animation.repeatCount, .infinity)
+        XCTAssertFalse(animation.isRemovedOnCompletion)
+        XCTAssertEqual(spinner.arcStrokeEndForTesting, 0.28, accuracy: 0.001)
+        XCTAssertEqual(spinner.ringWidthForTesting, max(1.6, 12 * 0.14), accuracy: 0.001)
+    }
+
+    @MainActor
+    func testLoadingSpinnerStopsCoreAnimationWhenRemovedFromWindow() throws {
+        let spinner = TabLoadingSpinnerLayerView(frame: NSRect(x: 4, y: 4, width: 12, height: 12))
+        spinner.configure(size: 12, color: .labelColor)
+
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 20, height: 20))
+        let window = NSWindow(
+            contentRect: contentView.bounds,
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = contentView
+        contentView.addSubview(spinner)
+        XCTAssertNotNil(spinner.activeRotationAnimationForTesting)
+
+        spinner.removeFromSuperview()
+        XCTAssertNil(spinner.activeRotationAnimationForTesting)
     }
 
     func testTabControlShortcutHintPolicyMatchesConfiguredModifiers() {
