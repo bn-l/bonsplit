@@ -597,7 +597,10 @@ final class TabLoadingSpinnerLayerView: NSView {
     }
 
     private func resolvedCGColor(_ color: NSColor, alphaMultiplier: CGFloat) -> CGColor {
-        let resolved = color.usingColorSpace(NSColorSpace.sRGB) ?? color
+        var resolved = color
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            resolved = color.usingColorSpace(NSColorSpace.sRGB) ?? color
+        }
         let alpha = resolved.alphaComponent * alphaMultiplier
         return resolved.withAlphaComponent(alpha).cgColor
     }
@@ -628,6 +631,10 @@ final class TabLoadingSpinnerLayerView: NSView {
 
     var ringWidthForTesting: CGFloat {
         arcLayer.lineWidth
+    }
+
+    var arcStrokeColorForTesting: CGColor? {
+        arcLayer.strokeColor
     }
 }
 
