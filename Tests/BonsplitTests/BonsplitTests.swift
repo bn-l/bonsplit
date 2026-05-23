@@ -1,6 +1,7 @@
 import XCTest
 @testable import Bonsplit
 import AppKit
+import QuartzCore
 import SwiftUI
 
 final class BonsplitTests: XCTestCase {
@@ -23,6 +24,34 @@ final class BonsplitTests: XCTestCase {
             if superview == nil {
                 BonsplitTabBarHitRegionRegistry.unregister(self)
             }
+        }
+    }
+
+    @MainActor
+    private final class FakeTabItemHitRegionView: NSView, BonsplitTabItemHitRegionProviding {
+        nonisolated(unsafe) var tabFrames: [CGRect] = []
+
+        deinit {
+            BonsplitTabItemHitRegionRegistry.unregister(self)
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            BonsplitTabItemHitRegionRegistry.unregister(self)
+            if window != nil {
+                BonsplitTabItemHitRegionRegistry.register(self)
+            }
+        }
+
+        override func viewDidMoveToSuperview() {
+            super.viewDidMoveToSuperview()
+            if superview == nil {
+                BonsplitTabItemHitRegionRegistry.unregister(self)
+            }
+        }
+
+        nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
+            tabFrames.contains { $0.contains(localPoint) }
         }
     }
 
@@ -395,6 +424,7 @@ final class BonsplitTests: XCTestCase {
     func testTabBarLayoutExpandsForMeasuredSplitButtonLaneWidth() {
         let layout = TabBarLayout(
             tabBarHeight: 28,
+            availableWidth: 800,
             splitButtonCount: 4,
             splitButtonLaneVisible: true,
             reservesSplitButtonLane: true,
@@ -420,6 +450,40 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(layout.visibleSplitButtonLaneWidth, 60)
         XCTAssertEqual(layout.trailingTabContentInset, 60)
         XCTAssertTrue(layout.splitButtonLaneOverflowsViewport)
+    }
+
+    func testTabBarLayoutDoesNotTreatZeroTabContentAsTrailingWhitespace() {
+        let layout = TabBarLayout(
+            tabBarHeight: 28,
+            availableWidth: 240,
+            tabContentWidthExcludingSplitButtonLane: 0,
+            splitButtonCount: 12,
+            splitButtonLaneVisible: true,
+            reservesSplitButtonLane: true,
+            measuredSplitButtonLaneWidth: 400
+        )
+
+        XCTAssertEqual(layout.maximumSplitButtonLaneWidth, 60)
+        XCTAssertEqual(layout.visibleSplitButtonLaneWidth, 60)
+        XCTAssertEqual(layout.trailingTabContentInset, 60)
+    }
+
+    func testTabBarLayoutUsesTrailingWhitespaceBeforeClippingSplitButtons() {
+        let measuredWidth = TabBarStyling.splitButtonsBackdropWidth(buttonCount: 10)
+        let layout = TabBarLayout(
+            tabBarHeight: 28,
+            availableWidth: 930,
+            tabContentWidthExcludingSplitButtonLane: 300,
+            splitButtonCount: 10,
+            splitButtonLaneVisible: true,
+            reservesSplitButtonLane: true,
+            measuredSplitButtonLaneWidth: measuredWidth
+        )
+
+        XCTAssertEqual(layout.maximumSplitButtonLaneWidth, 630)
+        XCTAssertEqual(layout.visibleSplitButtonLaneWidth, measuredWidth)
+        XCTAssertEqual(layout.trailingTabContentInset, measuredWidth)
+        XCTAssertFalse(layout.splitButtonLaneOverflowsViewport)
     }
 
     func testTabBarLayoutKeepsMeasuredLaneWhenItFitsQuarterOfAvailableWidth() {
@@ -598,6 +662,56 @@ final class BonsplitTests: XCTestCase {
         )
     }
 
+    func testTabBarSelectedChromeFrameFollowsCurrentSelection() {
+        let firstTabId = UUID()
+        let secondTabId = UUID()
+        let layout = TabBarLayout(
+            tabBarHeight: 28,
+            splitButtonCount: 0,
+            splitButtonLaneVisible: false,
+            reservesSplitButtonLane: false
+        )
+        let frames = [
+            firstTabId: CGRect(x: 12, y: 0, width: 120, height: 28),
+            secondTabId: CGRect(x: 144, y: 0, width: 96, height: 28),
+        ]
+        let totalWidth: CGFloat = 300
+
+        let firstSelectedFrame = TabBarStyling.selectedTabFrame(
+            selectedTabId: firstTabId,
+            tabFrames: frames
+        )
+        let secondSelectedFrame = TabBarStyling.selectedTabFrame(
+            selectedTabId: secondTabId,
+            tabFrames: frames
+        )
+        let firstIndicatorFrame = layout.selectedIndicatorFrame(
+            selectedTabFrame: firstSelectedFrame,
+            totalWidth: totalWidth
+        )
+        let secondIndicatorFrame = layout.selectedIndicatorFrame(
+            selectedTabFrame: secondSelectedFrame,
+            totalWidth: totalWidth
+        )
+
+        XCTAssertEqual(firstIndicatorFrame?.minX, frames[firstTabId]?.minX)
+        XCTAssertEqual(
+            secondIndicatorFrame?.minX,
+            frames[secondTabId]?.minX,
+            "Selected tab chrome must be derived from the current selected tab id, not a cached frame from a previous selection."
+        )
+        let nilSelectedFrame = TabBarStyling.selectedTabFrame(
+            selectedTabId: nil,
+            tabFrames: frames
+        )
+        XCTAssertNil(
+            layout.selectedIndicatorFrame(
+                selectedTabFrame: nilSelectedFrame,
+                totalWidth: totalWidth
+            )
+        )
+    }
+
     func testTabBarLayoutIgnoresMeasuredSplitButtonLaneWidthWithoutButtons() {
         let layout = TabBarLayout(
             tabBarHeight: 28,
@@ -733,6 +847,68 @@ final class BonsplitTests: XCTestCase {
         XCTAssertFalse(
             BonsplitTabBarHitRegionRegistry.containsWindowPoint(hitPoint, in: window),
             "Ancestor-hidden tab-bar regions must not keep stealing portal hit testing"
+        )
+    }
+
+    @MainActor
+    func testTabItemHitRegionRegistryTracksOnlyRealTabFrames() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        let tabBar = FakeTabItemHitRegionView(frame: NSRect(x: 20, y: 132, width: 220, height: 30))
+        tabBar.tabFrames = [
+            CGRect(x: 8, y: 0, width: 96, height: 30),
+            CGRect(x: 112, y: 0, width: 80, height: 30)
+        ]
+        contentView.addSubview(tabBar)
+
+        let tabPoint = tabBar.convert(NSPoint(x: 32, y: 12), to: nil)
+        XCTAssertTrue(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(tabPoint, in: window),
+            "Points inside actual tab frames should suppress implicit AppKit window dragging"
+        )
+
+        let emptyChromePoint = tabBar.convert(NSPoint(x: 204, y: 12), to: nil)
+        XCTAssertFalse(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(emptyChromePoint, in: window),
+            "Empty tab-bar chrome should stay available for explicit app-window dragging"
+        )
+    }
+
+    @MainActor
+    func testTabItemHitRegionRegistryIgnoresHiddenProviders() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        let tabBar = FakeTabItemHitRegionView(frame: NSRect(x: 20, y: 132, width: 220, height: 30))
+        tabBar.tabFrames = [CGRect(x: 8, y: 0, width: 96, height: 30)]
+        contentView.addSubview(tabBar)
+
+        let tabPoint = tabBar.convert(NSPoint(x: 32, y: 12), to: nil)
+        XCTAssertTrue(BonsplitTabItemHitRegionRegistry.containsWindowPoint(tabPoint, in: window))
+
+        tabBar.isHidden = true
+        XCTAssertFalse(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(tabPoint, in: window),
+            "Hidden tab providers must not suppress app-window dragging"
         )
     }
 
@@ -1089,6 +1265,28 @@ final class BonsplitTests: XCTestCase {
         XCTAssertLessThan(hoverAlpha, 0.12)
     }
 
+    func testSharedBackdropActiveTabBackgroundIsClear() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(
+                backgroundHex: "#272822",
+                tabBarBackgroundHex: "#00000000",
+                splitButtonBackdropHex: "#00000000",
+                paneBackgroundHex: "#00000000"
+            ),
+            usesSharedBackdrop: true
+        )
+        let active = NSColor(TabBarColors.activeTabBackground(for: appearance)).usingColorSpace(.sRGB)!
+
+        var alpha: CGFloat = 1
+        active.getRed(nil, green: nil, blue: nil, alpha: &alpha)
+
+        XCTAssertLessThan(
+            alpha,
+            0.01,
+            "Shared-backdrop selected tabs should rely on the active indicator instead of a hover-like fill"
+        )
+    }
+
     func testSplitActionPressedStateUsesHigherContrast() {
         let appearance = BonsplitConfiguration.Appearance(
             chromeColors: .init(backgroundHex: "#272822")
@@ -1243,6 +1441,42 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testRequestTabZoomToggleUsesHostHandler() {
+        let controller = BonsplitController()
+        let pane = controller.focusedPaneId!
+        let tabId = controller.createTab(title: "Zoom target")!
+        var requestedTabId: TabID?
+        var requestedPaneId: PaneID?
+        controller.onTabZoomToggleRequest = { tabId, paneId in
+            requestedTabId = tabId
+            requestedPaneId = paneId
+            return true
+        }
+
+        XCTAssertTrue(controller.requestTabZoomToggle(for: tabId, inPane: pane))
+
+        XCTAssertEqual(requestedTabId, tabId)
+        XCTAssertEqual(requestedPaneId, pane)
+        XCTAssertNil(controller.zoomedPaneId)
+    }
+
+    @MainActor
+    func testRequestTabZoomToggleFallsBackToInternalZoom() {
+        let controller = BonsplitController()
+        let pane = controller.focusedPaneId!
+        let tabId = controller.createTab(title: "Zoom target")!
+        guard controller.splitPane(pane, orientation: .horizontal) != nil else {
+            return XCTFail("Expected splitPane to create a new pane")
+        }
+
+        XCTAssertTrue(controller.requestTabZoomToggle(for: tabId, inPane: pane))
+        XCTAssertEqual(controller.zoomedPaneId, pane)
+
+        XCTAssertTrue(controller.requestTabZoomToggle(for: tabId, inPane: pane))
+        XCTAssertNil(controller.zoomedPaneId)
+    }
+
+    @MainActor
     func testSplitClearsExistingPaneZoom() {
         let controller = BonsplitController()
         guard let originalPane = controller.focusedPaneId else {
@@ -1326,16 +1560,24 @@ final class BonsplitTests: XCTestCase {
             canMoveToRightPane: true,
             isZoomed: false,
             hasSplits: true,
-            moveDestinations: [
-                TabContextMoveDestination(id: "workspace:abc", title: "Workspace A", isEnabled: false)
-            ],
             shortcuts: [:]
         )
-        let snapshot = TabContextMenuSnapshot(tabId: UUID(), state: state)
+        var moveDestinationRequestCount = 0
+        let snapshot = TabContextMenuSnapshot(
+            tabId: UUID(),
+            state: state,
+            moveDestinationsProvider: {
+                moveDestinationRequestCount += 1
+                return [
+                    TabContextMoveDestination(id: "workspace:abc", title: "Workspace A", isEnabled: false)
+                ]
+            }
+        )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
         let moveItem = menu.items.first { $0.title == "Move Tab" }
 
+        XCTAssertEqual(moveDestinationRequestCount, 1)
         XCTAssertNotNil(moveItem)
         XCTAssertTrue(moveItem?.isEnabled ?? false)
         XCTAssertEqual(moveItem?.submenu?.items.map(\.title), ["Move Tab to New Workspace", "Workspace A"])
@@ -1454,6 +1696,99 @@ final class BonsplitTests: XCTestCase {
         XCTAssertNil(spy.requestedPaneId)
     }
 
+    @MainActor
+    func testShortConfiguredTabKeepsCompactChromeWithExpandedHitSlop() {
+        let appearance = BonsplitConfiguration.Appearance(
+            tabMinWidth: 140,
+            tabMaxWidth: 220,
+            splitButtons: []
+        )
+        let controller = BonsplitController(configuration: BonsplitConfiguration(appearance: appearance))
+        let pane = controller.internalController.rootNode.allPanes.first!
+        let tab = TabItem(title: "~", icon: "terminal.fill")
+        pane.tabs = [tab]
+        pane.selectedTabId = tab.id
+
+        let hostingView = NSHostingView(
+            rootView: TabBarView(pane: pane, isFocused: true, showSplitButtons: true)
+                .environment(controller)
+                .environment(controller.internalController)
+        )
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 60),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        hostingView.frame = contentView.bounds
+        hostingView.autoresizingMask = [.width, .height]
+        contentView.addSubview(hostingView)
+
+        window.makeKeyAndOrderFront(nil)
+        contentView.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        contentView.layoutSubtreeIfNeeded()
+
+        let verticalCenter = appearance.tabBarHeight / 2
+        let compactTabHitEdge = TabBarMetrics.tabMinWidth + BonsplitTabItemHitTesting.horizontalSlop
+        let expandedHitPoint = hostingView.convert(
+            NSPoint(x: compactTabHitEdge - 2, y: verticalCenter),
+            to: nil
+        )
+        XCTAssertTrue(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(expandedHitPoint, in: window),
+            "A short-titled tab should keep compact visible chrome while owning a small expanded hit rect for minimal-mode drags"
+        )
+
+        let topEdgeTabPoint = hostingView.convert(
+            NSPoint(x: compactTabHitEdge - 2, y: appearance.tabBarHeight + 3),
+            to: nil
+        )
+        XCTAssertTrue(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(topEdgeTabPoint, in: window),
+            "A tab's horizontal lane must own near-titlebar-edge drags so minimal-mode top-edge tab drags do not become window drags"
+        )
+
+        let emptyChromePoint = hostingView.convert(
+            NSPoint(x: compactTabHitEdge + 24, y: verticalCenter),
+            to: nil
+        )
+        XCTAssertFalse(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(emptyChromePoint, in: window),
+            "Empty tab-strip chrome after the configured tab remains available for app-window dragging"
+        )
+
+        let topEdgeEmptyChromePoint = hostingView.convert(
+            NSPoint(x: compactTabHitEdge + 24, y: appearance.tabBarHeight + 3),
+            to: nil
+        )
+        XCTAssertFalse(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(topEdgeEmptyChromePoint, in: window),
+            "Near-titlebar-edge empty chrome after the tab should remain available for app-window dragging"
+        )
+    }
+
+    @MainActor
+    func testTabBarVisibilityDefaultsToAlways() throws {
+        XCTAssertEqual(BonsplitConfiguration().tabBarVisibility, .always)
+        XCTAssertTrue(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 0, visibility: .always)))
+        XCTAssertTrue(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 1, visibility: .always)))
+        XCTAssertTrue(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 2, visibility: .always)))
+    }
+
+    @MainActor
+    func testMultipleTabsVisibilityHidesPaneBarUntilThereAreMultipleTabs() throws {
+        XCTAssertFalse(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 0, visibility: .multipleTabs)))
+        XCTAssertFalse(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 1, visibility: .multipleTabs)))
+        XCTAssertTrue(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 2, visibility: .multipleTabs)))
+    }
+
     func testIconSaturationKeepsRasterFaviconInColorWhenInactive() {
         XCTAssertEqual(
             TabItemStyling.iconSaturation(hasRasterIcon: true, tabSaturation: 0.0),
@@ -1494,6 +1829,90 @@ final class BonsplitTests: XCTestCase {
         let existing = NSImage(size: NSSize(width: 16, height: 16))
         let resolved = TabItemStyling.resolvedFaviconImage(existing: existing, incomingData: nil)
         XCTAssertNil(resolved)
+    }
+
+    @MainActor
+    func testLoadingSpinnerUsesCoreAnimationRotationLayer() throws {
+        let spinner = TabLoadingSpinnerLayerView(frame: NSRect(x: 4, y: 4, width: 12, height: 12))
+        spinner.configure(size: 12, color: .labelColor)
+
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 20, height: 20))
+        let window = NSWindow(
+            contentRect: contentView.bounds,
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = contentView
+        contentView.addSubview(spinner)
+        contentView.layoutSubtreeIfNeeded()
+        spinner.layoutSubtreeIfNeeded()
+
+        try withExtendedLifetime(window) {
+            let animation = try XCTUnwrap(
+                spinner.activeRotationAnimationForTesting as? CABasicAnimation
+            )
+            XCTAssertEqual(animation.keyPath, "transform.rotation.z")
+            XCTAssertEqual(animation.duration, TabLoadingSpinnerLayerView.rotationDuration, accuracy: 0.001)
+            XCTAssertEqual(animation.repeatCount, .infinity)
+            XCTAssertFalse(animation.isRemovedOnCompletion)
+            XCTAssertEqual(spinner.arcStrokeEndForTesting, 0.28, accuracy: 0.001)
+            XCTAssertEqual(spinner.ringWidthForTesting, max(1.6, 12 * 0.14), accuracy: 0.001)
+        }
+    }
+
+    @MainActor
+    func testLoadingSpinnerResolvesDynamicColorWithEffectiveAppearance() throws {
+        let previousAppearance = NSApplication.shared.appearance
+        NSApplication.shared.appearance = NSAppearance(named: .aqua)
+        defer { NSApplication.shared.appearance = previousAppearance }
+
+        let spinner = TabLoadingSpinnerLayerView(frame: NSRect(x: 4, y: 4, width: 12, height: 12))
+        spinner.configure(size: 12, color: .labelColor)
+
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 20, height: 20))
+        let window = NSWindow(
+            contentRect: contentView.bounds,
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.contentView = contentView
+        contentView.addSubview(spinner)
+        contentView.layoutSubtreeIfNeeded()
+        spinner.layoutSubtreeIfNeeded()
+
+        try withExtendedLifetime(window) {
+            let cgColor = try XCTUnwrap(spinner.arcStrokeColorForTesting)
+            let color = try XCTUnwrap(NSColor(cgColor: cgColor)?.usingColorSpace(.sRGB))
+            XCTAssertGreaterThan(color.redComponent, 0.9)
+            XCTAssertGreaterThan(color.greenComponent, 0.9)
+            XCTAssertGreaterThan(color.blueComponent, 0.9)
+        }
+    }
+
+    @MainActor
+    func testLoadingSpinnerStopsCoreAnimationWhenRemovedFromWindow() throws {
+        let spinner = TabLoadingSpinnerLayerView(frame: NSRect(x: 4, y: 4, width: 12, height: 12))
+        spinner.configure(size: 12, color: .labelColor)
+
+        let contentView = NSView(frame: NSRect(x: 0, y: 0, width: 20, height: 20))
+        let window = NSWindow(
+            contentRect: contentView.bounds,
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = contentView
+        contentView.addSubview(spinner)
+
+        withExtendedLifetime(window) {
+            XCTAssertNotNil(spinner.activeRotationAnimationForTesting)
+
+            spinner.removeFromSuperview()
+            XCTAssertNil(spinner.activeRotationAnimationForTesting)
+        }
     }
 
     func testTabControlShortcutHintPolicyMatchesConfiguredModifiers() {
@@ -1790,6 +2209,15 @@ final class BonsplitTests: XCTestCase {
         )
     }
 
+    func testTabWidthRangeKeepsCompactVisualMinimum() {
+        let range = TabItemStyling.tabWidthRange(
+            for: BonsplitConfiguration.Appearance(tabMinWidth: 140, tabMaxWidth: 220)
+        )
+
+        XCTAssertEqual(range.lowerBound, TabBarMetrics.tabMinWidth)
+        XCTAssertEqual(range.upperBound, 220)
+    }
+
     func testActiveTabIndicatorHeightIsOneAndHalfPixels() {
         XCTAssertEqual(TabBarMetrics.activeIndicatorHeight, 1.5)
     }
@@ -1801,7 +2229,11 @@ final class BonsplitTests: XCTestCase {
             return
         }
 
-        XCTAssertEqual(width, TabBarMetrics.tabMinWidth - 1, accuracy: 0.5)
+        XCTAssertEqual(
+            width,
+            TabBarMetrics.tabMinWidth - TabBarMetrics.activeIndicatorTrailingInset,
+            accuracy: 0.5
+        )
     }
 
     @MainActor
@@ -2527,6 +2959,76 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabBarTrailingEmptyChromeDefersToRegisteredTabItemWhenFrameCacheIsEmpty() throws {
+        let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 30))
+        view.hitRegion = .trailingEmptyChrome(tabFrames: [], reservedTrailingWidth: 48)
+        view.hitTestEventTypeOverride = .leftMouseDown
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 60),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        contentView.addSubview(view)
+        let tabItem = FakeTabItemHitRegionView(frame: NSRect(x: 10, y: 0, width: 90, height: 30))
+        tabItem.tabFrames = [tabItem.bounds]
+        contentView.addSubview(tabItem)
+        window.makeKeyAndOrderFront(nil)
+
+        XCTAssertNil(
+            view.hitTest(NSPoint(x: 40, y: 15)),
+            "A registered pane tab owns its pixels even before the tab-frame preference cache is populated"
+        )
+        XCTAssertIdentical(
+            view.hitTest(NSPoint(x: 140, y: 15)),
+            view,
+            "Empty chrome after the registered tab should still drag the app window"
+        )
+    }
+
+    @MainActor
+    func testTabBarDragZoneCursorMarksOnlyMinimalModeWindowDragArea() {
+        let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 30))
+        view.hitRegion = .trailingEmptyChrome(
+            tabFrames: [CGRect(x: 10, y: 0, width: 90, height: 30)],
+            reservedTrailingWidth: 48
+        )
+
+        XCTAssertEqual(
+            view.windowDragCursorRectsForCurrentState(),
+            [],
+            "Standard mode should not advertise tab-bar window dragging with an open-hand cursor"
+        )
+
+        view.isMinimalMode = true
+
+        XCTAssertEqual(
+            view.windowDragCursorRectsForCurrentState(),
+            [NSRect(x: 110, y: 0, width: 162, height: 30)],
+            "Minimal mode should show the open-hand cursor only in empty chrome after the tab frames and before action buttons"
+        )
+    }
+
+    @MainActor
+    func testTabBarDragZoneCursorCoversEntireExplicitDragZoneInMinimalMode() {
+        let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
+        view.isMinimalMode = true
+
+        XCTAssertEqual(
+            view.windowDragCursorRectsForCurrentState(),
+            [view.bounds],
+            "Explicit leading and inline empty drag zones should be visibly marked as window-drag chrome in minimal mode"
+        )
+    }
+
+    @MainActor
     func testTabBarDragZoneKeepsFocusedPaneWindowDragInMinimalMode() throws {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
         view.isMinimalMode = true
@@ -2607,6 +3109,44 @@ final class BonsplitTests: XCTestCase {
         }
         for subview in root.subviews {
             if let match = firstDescendant(ofType: type, in: subview) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    @MainActor
+    private func waitForDescendant<T: NSView>(
+        ofType type: T.Type,
+        in root: NSView,
+        timeout: TimeInterval = 1.0,
+        where predicate: (T) -> Bool = { _ in true }
+    ) -> T? {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            root.layoutSubtreeIfNeeded()
+            if let match = firstDescendant(
+                ofType: type,
+                in: root,
+                where: predicate
+            ) {
+                return match
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        } while Date() < deadline
+        return firstDescendant(ofType: type, in: root, where: predicate)
+    }
+
+    private func firstDescendant<T: NSView>(
+        ofType type: T.Type,
+        in root: NSView,
+        where predicate: (T) -> Bool
+    ) -> T? {
+        if let match = root as? T, predicate(match) {
+            return match
+        }
+        for subview in root.subviews {
+            if let match = firstDescendant(ofType: type, in: subview, where: predicate) {
                 return match
             }
         }
@@ -3044,17 +3584,17 @@ final class BonsplitTests: XCTestCase {
             showSplitButtons: true,
             size: size,
             configurePane: { pane in
-                let selected = TabItem(title: "", icon: nil)
-                pane.tabs = [selected]
-                pane.selectedTabId = selected.id
+                let tabs = (0..<16).map { _ in TabItem(title: "", icon: nil) }
+                pane.tabs = tabs
+                pane.selectedTabId = tabs.first?.id
             }
         ) { hostingView in
             maximumBrightness(
                 in: hostingView,
                 sampleRect: NSRect(
-                    x: 100,
+                    x: size.width - splitButtonLaneWidth - 16,
                     y: 5,
-                    width: size.width - splitButtonLaneWidth - 108,
+                    width: 8,
                     height: size.height - 10
                 )
             )
@@ -3211,6 +3751,7 @@ final class BonsplitTests: XCTestCase {
         return renderedTabBarValue(
             isFocused: true,
             appearance: appearance,
+            size: NSSize(width: 320, height: TabBarMetrics.barHeight),
             configurePane: { pane in
                 let leading = TabItem(title: "", icon: nil)
                 let selected = TabItem(title: "", icon: nil)
@@ -3298,6 +3839,64 @@ final class BonsplitTests: XCTestCase {
         contentView.layoutSubtreeIfNeeded()
 
         return extract(hostingView)
+    }
+
+    @MainActor
+    private func renderedPaneContainerHasTabBar(
+        tabCount: Int,
+        visibility: TabBarVisibility
+    ) -> Bool? {
+        let controller = BonsplitController(
+            configuration: BonsplitConfiguration(tabBarVisibility: visibility)
+        )
+        guard let pane = controller.internalController.rootNode.allPanes.first else { return nil }
+
+        let tabs = (0..<tabCount).map { index in
+            TabItem(title: "Tab \(index + 1)", icon: nil)
+        }
+        pane.tabs = tabs
+        pane.selectedTabId = tabs.first?.id
+
+        let size = NSSize(width: 320, height: 180)
+        let hostingView = NSHostingView(
+            rootView: PaneContainerView(
+                pane: pane,
+                controller: controller.internalController,
+                contentBuilder: { _, _ in Color.clear },
+                emptyPaneBuilder: { _ in Color.clear },
+                showSplitButtons: false,
+                tabBarVisibility: visibility
+            )
+            .environment(controller)
+            .environment(controller.internalController)
+        )
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else { return nil }
+
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = NSColor.clear.cgColor
+        hostingView.frame = NSRect(origin: .zero, size: size)
+        hostingView.autoresizingMask = [.width, .height]
+        contentView.addSubview(hostingView)
+
+        window.makeKeyAndOrderFront(nil)
+        contentView.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        contentView.layoutSubtreeIfNeeded()
+
+        return waitForDescendant(
+            ofType: TabBarDragZoneView.DragNSView.self,
+            in: hostingView,
+            timeout: 0.1
+        ) != nil
     }
 
     @MainActor

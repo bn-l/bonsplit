@@ -94,6 +94,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
     var showSplitButtons: Bool = true
+    var tabBarVisibility: TabBarVisibility = .always
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
     /// Callback when geometry changes. Bool indicates if change is during active divider drag.
     var onGeometryChange: ((_ isDragging: Bool) -> Void)?
@@ -444,6 +445,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
                 showSplitButtons: showSplitButtons,
+                tabBarVisibility: tabBarVisibility,
                 contentViewLifecycle: contentViewLifecycle
             )
         case .split(let nestedSplitState):
@@ -454,6 +456,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
                 showSplitButtons: showSplitButtons,
+                tabBarVisibility: tabBarVisibility,
                 contentViewLifecycle: contentViewLifecycle,
                 onGeometryChange: onGeometryChange,
                 enableAnimations: enableAnimations,
