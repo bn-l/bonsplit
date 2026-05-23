@@ -1840,15 +1840,17 @@ final class BonsplitTests: XCTestCase {
         contentView.layoutSubtreeIfNeeded()
         spinner.layoutSubtreeIfNeeded()
 
-        let animation = try XCTUnwrap(
-            spinner.activeRotationAnimationForTesting as? CABasicAnimation
-        )
-        XCTAssertEqual(animation.keyPath, "transform.rotation.z")
-        XCTAssertEqual(animation.duration, TabLoadingSpinnerLayerView.rotationDuration, accuracy: 0.001)
-        XCTAssertEqual(animation.repeatCount, .infinity)
-        XCTAssertFalse(animation.isRemovedOnCompletion)
-        XCTAssertEqual(spinner.arcStrokeEndForTesting, 0.28, accuracy: 0.001)
-        XCTAssertEqual(spinner.ringWidthForTesting, max(1.6, 12 * 0.14), accuracy: 0.001)
+        try withExtendedLifetime(window) {
+            let animation = try XCTUnwrap(
+                spinner.activeRotationAnimationForTesting as? CABasicAnimation
+            )
+            XCTAssertEqual(animation.keyPath, "transform.rotation.z")
+            XCTAssertEqual(animation.duration, TabLoadingSpinnerLayerView.rotationDuration, accuracy: 0.001)
+            XCTAssertEqual(animation.repeatCount, .infinity)
+            XCTAssertFalse(animation.isRemovedOnCompletion)
+            XCTAssertEqual(spinner.arcStrokeEndForTesting, 0.28, accuracy: 0.001)
+            XCTAssertEqual(spinner.ringWidthForTesting, max(1.6, 12 * 0.14), accuracy: 0.001)
+        }
     }
 
     @MainActor
@@ -1865,10 +1867,13 @@ final class BonsplitTests: XCTestCase {
         )
         window.contentView = contentView
         contentView.addSubview(spinner)
-        XCTAssertNotNil(spinner.activeRotationAnimationForTesting)
 
-        spinner.removeFromSuperview()
-        XCTAssertNil(spinner.activeRotationAnimationForTesting)
+        withExtendedLifetime(window) {
+            XCTAssertNotNil(spinner.activeRotationAnimationForTesting)
+
+            spinner.removeFromSuperview()
+            XCTAssertNil(spinner.activeRotationAnimationForTesting)
+        }
     }
 
     func testTabControlShortcutHintPolicyMatchesConfiguredModifiers() {
