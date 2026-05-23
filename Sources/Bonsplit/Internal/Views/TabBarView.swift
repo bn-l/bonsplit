@@ -1287,6 +1287,7 @@ struct TabBarView: View {
             allowsShortcutHints: isFocused && splitViewController.tabShortcutHintsEnabled,
             showsControlShortcutHint: showsControlShortcutHints,
             shortcutModifierSymbol: controlKeyMonitor.shortcutModifierSymbol,
+            allowsClose: controller.configuration.allowCloseTabs,
             contextMenuState: contextMenuState,
             moveDestinationsProvider: {
                 controller.tabContextMoveDestinationsProvider?(TabID(id: tab.id), pane.id) ?? []
@@ -1303,14 +1304,14 @@ struct TabBarView: View {
                     controller.focusPane(pane.id)
                 }
             },
-            onClose: {
+            onClose: { source in
                 guard !tab.isPinned else { return }
                 // Close should be instant (no fade-out/removal animation).
 #if DEBUG
                 dlog("tab.close pane=\(pane.id.id.uuidString.prefix(5)) tab=\(tab.id.uuidString.prefix(5)) title=\"\(tab.title)\"")
 #endif
                 withTransaction(Transaction(animation: nil)) {
-                    controller.onTabCloseRequest?(TabID(id: tab.id), pane.id)
+                    controller.onTabCloseRequest?(TabID(id: tab.id), pane.id, source)
                     _ = controller.closeTab(TabID(id: tab.id), inPane: pane.id)
                 }
             },
@@ -1360,17 +1361,19 @@ struct TabBarView: View {
     }
 
     private func contextMenuState(for tab: TabItem, at index: Int) -> TabContextMenuState {
+        let allowsCloseTabs = controller.configuration.allowCloseTabs
         let leftTabs = pane.tabs.prefix(index)
-        let canCloseToLeft = leftTabs.contains(where: { !$0.isPinned })
+        let canCloseToLeft = allowsCloseTabs && leftTabs.contains(where: { !$0.isPinned })
         let canCloseToRight: Bool
         if (index + 1) < pane.tabs.count {
-            canCloseToRight = pane.tabs.suffix(from: index + 1).contains(where: { !$0.isPinned })
+            canCloseToRight = allowsCloseTabs && pane.tabs.suffix(from: index + 1).contains(where: { !$0.isPinned })
         } else {
             canCloseToRight = false
         }
-        let canCloseOthers = pane.tabs.enumerated().contains { itemIndex, item in
-            itemIndex != index && !item.isPinned
-        }
+        let canCloseOthers = allowsCloseTabs
+            && pane.tabs.enumerated().contains { itemIndex, item in
+                itemIndex != index && !item.isPinned
+            }
         return TabContextMenuState(
             isPinned: tab.isPinned,
             isUnread: tab.showsNotificationBadge,

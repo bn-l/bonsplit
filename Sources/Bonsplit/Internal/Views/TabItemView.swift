@@ -70,10 +70,11 @@ struct TabItemView: View {
     let allowsShortcutHints: Bool
     let showsControlShortcutHint: Bool
     let shortcutModifierSymbol: String
+    let allowsClose: Bool
     let contextMenuState: TabContextMenuState
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
     let onSelect: () -> Void
-    let onClose: () -> Void
+    let onClose: (TabCloseRequestSource) -> Void
     let onZoomToggle: () -> Void
     let onContextAction: (TabContextAction) -> Void
     let onMoveDestination: (String) -> Void
@@ -207,8 +208,8 @@ struct TabItemView: View {
         // Middle click to close (macOS convention).
         // Uses an AppKit event monitor so it doesn't interfere with left click selection or drag/reorder.
         .background(MiddleClickMonitorView(onMiddleClick: {
-            guard !tab.isPinned else { return }
-            onClose()
+            guard allowsClose, !tab.isPinned else { return }
+            onClose(.middleClick)
         }))
         .background(TabContextMenuPresenter(
             snapshot: TabContextMenuSnapshot(
@@ -436,10 +437,10 @@ struct TabItemView: View {
                         .frame(width: accessorySlotSize, height: accessorySlotSize)
                         .saturation(saturation)
                 }
-            } else if isSelected || isHovered || isCloseHovered {
+            } else if allowsClose && (isSelected || isHovered || isCloseHovered) {
                 // Close button (always visible on active tab, shown on hover for others)
                 Button {
-                    onClose()
+                    onClose(.closeButton)
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: TabBarMetrics.closeIconSize, weight: .semibold))
