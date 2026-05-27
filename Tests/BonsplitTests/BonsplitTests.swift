@@ -3300,6 +3300,7 @@ final class BonsplitTests: XCTestCase {
             }
         ) { hostingView in
             guard let scrollView = firstDescendant(ofType: NSScrollView.self, in: hostingView) else {
+                XCTFail("Expected tab bar scroll view for manual scroll regression")
                 return nil
             }
             scrollView.contentView.scroll(to: NSPoint(x: 96, y: 0))
