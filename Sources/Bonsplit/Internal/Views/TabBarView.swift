@@ -1915,6 +1915,9 @@ struct TabBarView: View {
                 .fill(TabBarColors.activeIndicator(saturation: tabBarSaturation))
                 .frame(width: frame.width, height: TabBarMetrics.activeIndicatorHeight)
                 .offset(x: frame.minX)
+                .transaction { transaction in
+                    transaction.animation = nil
+                }
         }
     }
 
