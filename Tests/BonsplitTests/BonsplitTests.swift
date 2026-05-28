@@ -1550,6 +1550,7 @@ final class BonsplitTests: XCTestCase {
             isPinned: false,
             isUnread: false,
             isBrowser: false,
+            isAudioMuted: false,
             isTerminal: true,
             hasCustomTitle: false,
             canCloseToLeft: true,
@@ -1591,6 +1592,73 @@ final class BonsplitTests: XCTestCase {
         let workspaceItem = try XCTUnwrap(moveItem?.submenu?.items.dropFirst().first)
         target.performMoveDestination(workspaceItem)
         XCTAssertEqual(selectedDestinationId, "workspace:abc")
+    }
+
+    @MainActor
+    func testBrowserTabContextMenuCreatesAudioMuteToggle() throws {
+        let target = TabContextMenuActionTarget()
+        var selectedAction: TabContextAction?
+        target.onContextAction = { selectedAction = $0 }
+        let snapshot = TabContextMenuSnapshot(
+            tabId: UUID(),
+            state: TabContextMenuState(
+                isPinned: false,
+                isUnread: false,
+                isBrowser: true,
+                isAudioMuted: false,
+                isTerminal: false,
+                hasCustomTitle: false,
+                canCloseToLeft: false,
+                canCloseToRight: false,
+                canCloseOthers: false,
+                canMoveToNewWorkspace: false,
+                canMoveToLeftPane: false,
+                canMoveToRightPane: false,
+                canForkConversation: false,
+                isZoomed: false,
+                hasSplits: false,
+                shortcuts: [:]
+            ),
+            moveDestinationsProvider: { [] }
+        )
+
+        let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
+        let muteItem = try XCTUnwrap(menu.items.first { $0.title == "Mute Tab" })
+        target.performContextAction(muteItem)
+
+        XCTAssertEqual(selectedAction, .toggleAudioMute)
+    }
+
+    @MainActor
+    func testBrowserTabContextMenuUsesUnmuteTitleWhenAudioMuted() throws {
+        let target = TabContextMenuActionTarget()
+        let snapshot = TabContextMenuSnapshot(
+            tabId: UUID(),
+            state: TabContextMenuState(
+                isPinned: false,
+                isUnread: false,
+                isBrowser: true,
+                isAudioMuted: true,
+                isTerminal: false,
+                hasCustomTitle: false,
+                canCloseToLeft: false,
+                canCloseToRight: false,
+                canCloseOthers: false,
+                canMoveToNewWorkspace: false,
+                canMoveToLeftPane: false,
+                canMoveToRightPane: false,
+                canForkConversation: false,
+                isZoomed: false,
+                hasSplits: false,
+                shortcuts: [:]
+            ),
+            moveDestinationsProvider: { [] }
+        )
+
+        let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
+
+        XCTAssertTrue(menu.items.contains { $0.title == "Unmute Tab" })
+        XCTAssertFalse(menu.items.contains { $0.title == "Mute Tab" })
     }
 
     @MainActor
