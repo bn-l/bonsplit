@@ -6,8 +6,36 @@ private var splitContainerProgrammaticSyncDepth = 0
 private class ThemedSplitView: NSSplitView {
     var customDividerColor: NSColor?
 
+    /// Host-configured divider thickness in points. When `nil` the split view
+    /// uses AppKit's default thickness for its `dividerStyle`.
+    var customDividerThickness: CGFloat? {
+        didSet {
+            guard oldValue != customDividerThickness else { return }
+            // Thickness participates in pane layout, so re-run AppKit's divider
+            // bookkeeping and repaint when the host changes it on config reload.
+            needsLayout = true
+            needsDisplay = true
+        }
+    }
+
     override var dividerColor: NSColor {
         customDividerColor ?? super.dividerColor
+    }
+
+    override var dividerThickness: CGFloat {
+        customDividerThickness ?? super.dividerThickness
+    }
+
+    // Paint the full reserved divider rect with the resolved color so a
+    // thicker-than-hairline divider renders as a solid bar. AppKit's `.thin`
+    // style otherwise draws a 1pt line regardless of the reserved thickness.
+    override func drawDivider(in rect: NSRect) {
+        guard let customDividerColor else {
+            super.drawDivider(in: rect)
+            return
+        }
+        customDividerColor.setFill()
+        rect.fill()
     }
 
     override var isOpaque: Bool { false }
@@ -122,6 +150,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         let splitView = ThemedSplitView()
 #endif
         splitView.customDividerColor = TabBarColors.nsColorSeparator(for: appearance)
+        splitView.customDividerThickness = TabBarMetrics.resolvedDividerThickness(appearance.dividerThickness)
         splitView.isVertical = splitState.orientation == .horizontal
         splitView.dividerStyle = .thin
         splitView.delegate = context.coordinator
@@ -327,6 +356,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         splitView.layer?.backgroundColor = NSColor.clear.cgColor
         splitView.layer?.isOpaque = false
         (splitView as? ThemedSplitView)?.customDividerColor = TabBarColors.nsColorSeparator(for: appearance)
+        (splitView as? ThemedSplitView)?.customDividerThickness =
+            TabBarMetrics.resolvedDividerThickness(appearance.dividerThickness)
 
         // Update orientation if changed
         splitView.isVertical = splitState.orientation == .horizontal
