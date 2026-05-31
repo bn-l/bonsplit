@@ -325,7 +325,13 @@ private final class TabBarScrollViewBridge: ObservableObject {
 }
 
 enum TabBarStyling {
+    struct SplitActionSystemImage: Equatable {
+        let name: String
+        let rotationDegrees: Double
+    }
+
     static let maximumSplitButtonLaneWidthFraction: CGFloat = 0.25
+    static let minimumFullyVisibleSplitButtonCount = 5
     static let splitButtonScrollFadeWidth: CGFloat = 12
     static let splitActionButtonReservedWidth: CGFloat = 22
     static let splitButtonsSpacing: CGFloat = 4
@@ -342,6 +348,22 @@ enum TabBarStyling {
             + splitButtonsTrailingPadding
             + (CGFloat(buttonCount) * splitActionButtonReservedWidth)
             + (CGFloat(max(0, buttonCount - 1)) * splitButtonsSpacing)
+    }
+
+    static func minimumVisibleSplitButtonLaneWidth(buttonCount: Int) -> CGFloat {
+        splitButtonsBackdropWidth(
+            buttonCount: min(max(0, buttonCount), minimumFullyVisibleSplitButtonCount)
+        )
+    }
+
+    static func splitActionSystemImage(for name: String) -> SplitActionSystemImage {
+        if NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil {
+            return SplitActionSystemImage(name: name, rotationDegrees: 0)
+        }
+        if name == "ellipsis.vertical" {
+            return SplitActionSystemImage(name: "ellipsis", rotationDegrees: 90)
+        }
+        return SplitActionSystemImage(name: "questionmark.circle", rotationDegrees: 0)
     }
 
     static func splitButtonBackdropSolidSurfaceWidth(
@@ -506,7 +528,11 @@ struct TabBarLayout: Equatable {
     var maximumSplitButtonLaneWidth: CGFloat {
         guard availableWidth > 0 else { return 0 }
         let fractionLimit = availableWidth * TabBarStyling.maximumSplitButtonLaneWidthFraction
-        return max(fractionLimit, trailingWhitespaceBeforeSplitButtonLane)
+        return max(
+            fractionLimit,
+            trailingWhitespaceBeforeSplitButtonLane,
+            TabBarStyling.minimumVisibleSplitButtonLaneWidth(buttonCount: splitButtonCount)
+        )
     }
 
     var trailingWhitespaceBeforeSplitButtonLane: CGFloat {
@@ -1764,8 +1790,10 @@ struct TabBarView: View {
     private func splitActionButtonIcon(_ icon: BonsplitConfiguration.SplitActionButton.Icon) -> some View {
         switch icon {
         case .systemImage(let name):
-            Image(systemName: name)
+            let image = TabBarStyling.splitActionSystemImage(for: name)
+            Image(systemName: image.name)
                 .font(.system(size: 12))
+                .rotationEffect(.degrees(image.rotationDegrees))
         case .emoji(let value, let scale):
             Text(value)
                 .font(.system(size: emojiIconFontSize(scale: scale)))
