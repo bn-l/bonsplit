@@ -1756,12 +1756,7 @@ struct TabBarView: View {
         HStack(spacing: TabBarStyling.splitButtonsSpacing) {
             ForEach(buttons.indices, id: \.self) { index in
                 let button = buttons[index]
-                Button {
-                    performSplitActionButton(button)
-                } label: {
-                    splitActionButtonIcon(button.icon)
-                }
-                .buttonStyle(SplitActionButtonStyle(appearance: appearance, layout: tabBarLayout))
+                splitActionButton(button, tooltips: tooltips)
                 .accessibilityIdentifier(splitActionButtonAccessibilityIdentifier(button))
                 .safeHelp(splitActionButtonTooltip(button, tooltips: tooltips))
             }
@@ -1769,6 +1764,35 @@ struct TabBarView: View {
         .padding(.leading, TabBarStyling.splitButtonsLeadingPadding)
         .padding(.trailing, TabBarStyling.splitButtonsTrailingPadding)
         .frame(height: tabBarHeight, alignment: .center)
+    }
+
+    @ViewBuilder
+    private func splitActionButton(
+        _ button: BonsplitConfiguration.SplitActionButton,
+        tooltips: BonsplitConfiguration.SplitButtonTooltips
+    ) -> some View {
+        if button.activatesOnMouseDown {
+            splitActionButtonIcon(button.icon)
+                .frame(height: tabBarLayout.splitActionButtonHeight)
+                .contentShape(Rectangle())
+                .foregroundStyle(TabBarColors.splitActionIcon(for: appearance, isPressed: false))
+                .tabBarButtonAnimationsDisabled()
+                .overlay(
+                    SplitActionMouseDownOverlay {
+                        performSplitActionButton(button)
+                    }
+                )
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(splitActionButtonTooltip(button, tooltips: tooltips))
+                .accessibilityAddTraits(.isButton)
+        } else {
+            Button {
+                performSplitActionButton(button)
+            } label: {
+                splitActionButtonIcon(button.icon)
+            }
+            .buttonStyle(SplitActionButtonStyle(appearance: appearance, layout: tabBarLayout))
+        }
     }
 
     private func splitActionButtonAccessibilityIdentifier(_ button: BonsplitConfiguration.SplitActionButton) -> String {
@@ -2082,6 +2106,32 @@ private struct SplitActionButtonStyle: ButtonStyle {
             .foregroundStyle(TabBarColors.splitActionIcon(for: appearance, isPressed: configuration.isPressed))
             .opacity(configuration.isPressed ? 0.72 : 1.0)
             .tabBarButtonAnimationsDisabled()
+    }
+}
+
+private struct SplitActionMouseDownOverlay: NSViewRepresentable {
+    let onMouseDown: () -> Void
+
+    func makeNSView(context: Context) -> SplitActionMouseDownNSView {
+        let view = SplitActionMouseDownNSView()
+        view.onMouseDown = onMouseDown
+        return view
+    }
+
+    func updateNSView(_ nsView: SplitActionMouseDownNSView, context: Context) {
+        nsView.onMouseDown = onMouseDown
+    }
+}
+
+private final class SplitActionMouseDownNSView: NSView {
+    var onMouseDown: (() -> Void)?
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        onMouseDown?()
     }
 }
 

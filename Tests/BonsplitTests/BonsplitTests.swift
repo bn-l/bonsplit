@@ -273,6 +273,36 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(decoded, button)
     }
 
+    func testCustomSplitActionButtonCanActivateOnMouseDown() throws {
+        let button = BonsplitConfiguration.SplitActionButton(
+            id: "tools",
+            systemImage: "ellipsis.vertical",
+            tooltip: "Tools",
+            action: .custom("tools"),
+            activatesOnMouseDown: true
+        )
+
+        let data = try JSONEncoder().encode(button)
+        let decoded = try JSONDecoder().decode(BonsplitConfiguration.SplitActionButton.self, from: data)
+
+        XCTAssertEqual(decoded, button)
+        XCTAssertTrue(decoded.activatesOnMouseDown)
+    }
+
+    func testSplitActionButtonDecodesMissingMouseDownActivationAsFalse() throws {
+        let data = #"""
+        {
+          "id": "terminal",
+          "icon": { "type": "systemImage", "name": "terminal" },
+          "action": "newTerminal"
+        }
+        """#.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(BonsplitConfiguration.SplitActionButton.self, from: data)
+
+        XCTAssertFalse(decoded.activatesOnMouseDown)
+    }
+
     func testCustomSplitActionButtonPreservesReservedActionName() throws {
         let button = BonsplitConfiguration.SplitActionButton(
             id: "custom-terminal",
