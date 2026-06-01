@@ -328,6 +328,7 @@ enum TabBarStyling {
     struct SplitActionSystemImage: Equatable {
         let name: String
         let rotationDegrees: Double
+        let pointSize: CGFloat
     }
 
     static let maximumSplitButtonLaneWidthFraction: CGFloat = 0.25
@@ -358,12 +359,12 @@ enum TabBarStyling {
 
     static func splitActionSystemImage(for name: String) -> SplitActionSystemImage {
         if NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil {
-            return SplitActionSystemImage(name: name, rotationDegrees: 0)
+            return SplitActionSystemImage(name: name, rotationDegrees: 0, pointSize: 12)
         }
         if name == "ellipsis.vertical" {
-            return SplitActionSystemImage(name: "ellipsis", rotationDegrees: 90)
+            return SplitActionSystemImage(name: "ellipsis", rotationDegrees: 90, pointSize: 10.5)
         }
-        return SplitActionSystemImage(name: "questionmark.circle", rotationDegrees: 0)
+        return SplitActionSystemImage(name: "questionmark.circle", rotationDegrees: 0, pointSize: 12)
     }
 
     static func splitButtonBackdropSolidSurfaceWidth(
@@ -1816,7 +1817,7 @@ struct TabBarView: View {
         case .systemImage(let name):
             let image = TabBarStyling.splitActionSystemImage(for: name)
             Image(systemName: image.name)
-                .font(.system(size: 12))
+                .font(.system(size: image.pointSize))
                 .rotationEffect(.degrees(image.rotationDegrees))
         case .emoji(let value, let scale):
             Text(value)

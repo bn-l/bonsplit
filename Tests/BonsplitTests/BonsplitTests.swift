@@ -406,19 +406,19 @@ final class BonsplitTests: XCTestCase {
     func testSplitActionSystemImageKeepsSupportedSymbols() {
         let image = TabBarStyling.splitActionSystemImage(for: "terminal")
 
-        XCTAssertEqual(image, TabBarStyling.SplitActionSystemImage(name: "terminal", rotationDegrees: 0))
+        XCTAssertEqual(image, TabBarStyling.SplitActionSystemImage(name: "terminal", rotationDegrees: 0, pointSize: 12))
     }
 
     func testSplitActionSystemImageRendersVerticalEllipsisFallback() {
         let image = TabBarStyling.splitActionSystemImage(for: "ellipsis.vertical")
 
-        XCTAssertEqual(image, TabBarStyling.SplitActionSystemImage(name: "ellipsis", rotationDegrees: 90))
+        XCTAssertEqual(image, TabBarStyling.SplitActionSystemImage(name: "ellipsis", rotationDegrees: 90, pointSize: 10.5))
     }
 
     func testSplitActionSystemImageUsesFallbackForUnknownSymbols() {
         let image = TabBarStyling.splitActionSystemImage(for: "cmux.definitely.missing.symbol")
 
-        XCTAssertEqual(image, TabBarStyling.SplitActionSystemImage(name: "questionmark.circle", rotationDegrees: 0))
+        XCTAssertEqual(image, TabBarStyling.SplitActionSystemImage(name: "questionmark.circle", rotationDegrees: 0, pointSize: 12))
     }
 
     func testMinimalModeDoesNotReserveHiddenSplitButtonStrip() {
