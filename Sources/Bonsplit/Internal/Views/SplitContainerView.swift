@@ -356,8 +356,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         splitView.layer?.backgroundColor = NSColor.clear.cgColor
         splitView.layer?.isOpaque = false
         (splitView as? ThemedSplitView)?.customDividerColor = TabBarColors.nsColorSeparator(for: appearance)
-        (splitView as? ThemedSplitView)?.customDividerThickness =
-            TabBarMetrics.resolvedDividerThickness(appearance.dividerThickness)
+        let resolvedThickness = TabBarMetrics.resolvedDividerThickness(appearance.dividerThickness)
+        let dividerThicknessChanged = (splitView as? ThemedSplitView)?.customDividerThickness != resolvedThickness
+        (splitView as? ThemedSplitView)?.customDividerThickness = resolvedThickness
 
         // Update orientation if changed
         splitView.isVertical = splitState.orientation == .horizontal
@@ -401,6 +402,14 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // Then sync if the position changed externally
         let currentPosition = splitState.dividerPosition
         context.coordinator.syncPosition(currentPosition, in: splitView)
+
+        // A pure divider-thickness change doesn't move the model divider
+        // position, so `syncPosition` early-returns and AppKit keeps the cached
+        // pane frames — leaving the painted divider at its old width. Force a
+        // re-divide so the new thickness changes the gap immediately.
+        if dividerThicknessChanged {
+            context.coordinator.reapplyDividerForThicknessChange(in: splitView)
+        }
     }
 
     // MARK: - Helpers
@@ -656,6 +665,23 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             if layout {
                 splitView.layoutSubtreeIfNeeded()
             }
+        }
+
+        /// Re-divide the split using the model's current fractional position so a
+        /// runtime change to `dividerThickness` takes effect immediately.
+        ///
+        /// `setPosition(_:ofDividerAt:)` recomputes both arranged-subview frames
+        /// against the split view's current `dividerThickness`; recomputing from
+        /// the stored fraction preserves the user's split ratio while widening
+        /// (or narrowing) the gap to match the new thickness.
+        func reapplyDividerForThicknessChange(in splitView: NSSplitView) {
+            guard splitView.arrangedSubviews.count >= 2 else { return }
+            let available = splitAvailableSize(in: splitView)
+            guard available > 0 else { return }
+            let bounds = normalizedDividerBounds(in: splitView)
+            let normalized = max(bounds.lowerBound, min(bounds.upperBound, splitState.dividerPosition))
+            setPositionSafely(available * normalized, in: splitView, layout: true)
+            lastAppliedPosition = normalized
         }
 
         func syncPosition(_ statePosition: CGFloat, in splitView: NSSplitView) {
