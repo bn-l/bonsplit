@@ -406,9 +406,13 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // A pure divider-thickness change doesn't move the model divider
         // position, so `syncPosition` early-returns and AppKit keeps the cached
         // pane frames — leaving the painted divider at its old width. Force a
-        // re-divide so the new thickness changes the gap immediately.
+        // re-divide so the new thickness changes the gap. Deferred to the next
+        // runloop turn (mirroring `applyInitialDividerPosition`) so it runs
+        // after this layout pass settles real, non-zero bounds.
         if dividerThicknessChanged {
-            context.coordinator.reapplyDividerForThicknessChange(in: splitView)
+            DispatchQueue.main.async {
+                context.coordinator.reapplyDividerForThicknessChange(in: splitView)
+            }
         }
     }
 
