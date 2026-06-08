@@ -3407,12 +3407,18 @@ struct TabDropDelegate: DropDelegate {
                     if targetIndex == sourceIndex || targetIndex == sourceIndex + 1 {
                         return
                     }
+                    // Guard the delegate on an actual order change (mirrors the manual-drag
+                    // path): if moveTab is a no-op, firing didReorderTabsInPane would push a
+                    // spurious reorder to consumers (e.g. a redundant tmux swap-window).
+                    let orderBeforeReorder = pane.tabs.map { $0.id }
                     pane.moveTab(from: sourceIndex, to: targetIndex)
-                    bonsplitController.delegate?.splitTabBar(
-                        bonsplitController,
-                        didReorderTabsInPane: pane.id,
-                        orderedTabIds: pane.tabs.map { TabID(id: $0.id) }
-                    )
+                    if pane.tabs.map({ $0.id }) != orderBeforeReorder {
+                        bonsplitController.delegate?.splitTabBar(
+                            bonsplitController,
+                            didReorderTabsInPane: pane.id,
+                            orderedTabIds: pane.tabs.map { TabID(id: $0.id) }
+                        )
+                    }
                 } else {
                     _ = bonsplitController.moveTab(
                         TabID(id: draggedTab.id),
