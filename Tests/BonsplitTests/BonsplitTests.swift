@@ -179,6 +179,24 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabAudioPlayingRoundTrips() {
+        let controller = BonsplitController()
+        let tabId = controller.createTab(title: "Audio", icon: "globe", isAudioPlaying: true)!
+
+        XCTAssertEqual(controller.tab(tabId)?.isAudioPlaying, true)
+
+        // A nil update leaves the flag untouched; an explicit false clears it.
+        controller.updateTab(tabId, title: "Audio 2")
+        XCTAssertEqual(controller.tab(tabId)?.isAudioPlaying, true)
+
+        controller.updateTab(tabId, isAudioPlaying: false)
+        XCTAssertEqual(controller.tab(tabId)?.isAudioPlaying, false)
+
+        controller.updateTab(tabId, isAudioPlaying: true)
+        XCTAssertEqual(controller.tab(tabId)?.isAudioPlaying, true)
+    }
+
+    @MainActor
     func testTabClose() {
         let controller = BonsplitController()
         let tabId = controller.createTab(title: "Test Tab", icon: "doc")!
