@@ -2477,6 +2477,40 @@ final class BonsplitTests: XCTestCase {
         XCTAssertGreaterThan(width, 0)
     }
 
+    func testPinnedIconOnlyWidthKeepsBaseWhenNoShortcutHintReserved() {
+        let base = TabItemStyling.pinnedIconOnlyWidth(iconSlotSize: 14, horizontalPadding: 6)
+        let reserved = TabItemStyling.pinnedIconOnlyWidth(
+            iconSlotSize: 14,
+            horizontalPadding: 6,
+            reservedShortcutHintWidth: nil
+        )
+        XCTAssertEqual(reserved, base)
+    }
+
+    func testPinnedIconOnlyWidthReservesShortcutHintPillToAvoidLayoutShift() {
+        // A wide hint pill expands the chip so the pill (shown only on modifier-hold)
+        // always fits without resizing the tab.
+        let pill: CGFloat = 30
+        let width = TabItemStyling.pinnedIconOnlyWidth(
+            iconSlotSize: 14,
+            horizontalPadding: 6,
+            reservedShortcutHintWidth: pill
+        )
+        XCTAssertEqual(width, ceil(pill + 6 * 2))
+        XCTAssertGreaterThan(width, TabItemStyling.pinnedIconOnlyWidth(iconSlotSize: 14, horizontalPadding: 6))
+    }
+
+    func testPinnedIconOnlyWidthKeepsBaseWhenReservedHintIsNarrow() {
+        // A narrow hint that fits inside the base chip must not shrink the tab.
+        let base = TabItemStyling.pinnedIconOnlyWidth(iconSlotSize: 14, horizontalPadding: 6)
+        let width = TabItemStyling.pinnedIconOnlyWidth(
+            iconSlotSize: 14,
+            horizontalPadding: 6,
+            reservedShortcutHintWidth: 1
+        )
+        XCTAssertEqual(width, base)
+    }
+
     func testTabShortcutHintSlotWidthDoesNotChangeWithVisibility() {
         let label = "⌃9"
         let accessorySlotSize: CGFloat = 18

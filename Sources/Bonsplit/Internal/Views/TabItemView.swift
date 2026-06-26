@@ -176,6 +176,20 @@ enum TabItemStyling {
         let padding = max(0, horizontalPadding)
         return ceil(icon + padding * 2 + 6)
     }
+
+    /// Icon-only pinned width that also reserves room for the control-shortcut hint
+    /// pill when one can be shown, so holding the modifier never resizes the tab.
+    /// Pass `reservedShortcutHintWidth == nil` when the tab has no hint to reserve.
+    static func pinnedIconOnlyWidth(
+        iconSlotSize: CGFloat,
+        horizontalPadding: CGFloat,
+        reservedShortcutHintWidth: CGFloat?
+    ) -> CGFloat {
+        let base = pinnedIconOnlyWidth(iconSlotSize: iconSlotSize, horizontalPadding: horizontalPadding)
+        guard let reservedShortcutHintWidth else { return base }
+        let reserved = ceil(max(0, reservedShortcutHintWidth) + max(0, horizontalPadding) * 2)
+        return max(base, reserved)
+    }
 }
 
 /// Individual tab view with icon, title, close button, and dirty indicator
@@ -409,15 +423,28 @@ struct TabItemView: View {
 
     /// Compact pinned-browser layout: a centered favicon with a small status badge
     /// overlay for audio/unread/dirty activity. The full title stays reachable via
-    /// the tab tooltip and accessibility label.
+    /// the tab tooltip and accessibility label. When the tab-shortcut modifier is
+    /// held, the favicon crossfades to the modifier+number hint pill so number-based
+    /// selection stays discoverable (mirrors the standard layout's trailing slot).
     @ViewBuilder
     private var iconOnlyContent: some View {
-        leadingIcon
-            .overlay(alignment: .topTrailing) {
-                pinnedActivityBadge
-                    .offset(x: 4, y: -3)
+        ZStack {
+            leadingIcon
+                .overlay(alignment: .topTrailing) {
+                    pinnedActivityBadge
+                        .offset(x: 3, y: -2)
+                }
+                .opacity(showsShortcutHint ? 0 : 1)
+                // Suppress the audio badge's tap target while the hint pill is shown.
+                .allowsHitTesting(!showsShortcutHint)
+
+            if let shortcutHintLabel {
+                TabControlShortcutHintPill(text: shortcutHintLabel)
+                    .opacity(showsShortcutHint ? 1 : 0)
                     .allowsHitTesting(false)
             }
+        }
+        .tabControlShortcutHintVisibilityAnimation(value: showsShortcutHint)
     }
 
     /// Leading favicon / loading spinner / symbol icon. Shared by the standard and
@@ -478,28 +505,51 @@ struct TabItemView: View {
 
     /// Small corner badge for icon-only pinned tabs, preserving the audio/unread/
     /// dirty signals that the collapsed layout otherwise hides. A single slot keeps
-    /// the chip uncluttered: audio takes priority, then unread, then dirty.
+    /// the chip uncluttered: audio takes priority, then unread, then dirty. The audio
+    /// badge stays click-to-mute (same `.toggleAudioMute` route as the standard
+    /// layout); the unread/dirty dots are non-interactive indicators.
     @ViewBuilder
     private var pinnedActivityBadge: some View {
         if !tab.isLoading {
             if tab.isAudioMuted || tab.isAudioPlaying {
-                Image(systemName: tab.isAudioMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                    .font(.system(size: max(6, accessoryFontSize - 4), weight: .semibold))
-                    .foregroundStyle(
-                        isSelected
-                            ? TabBarColors.activeText(for: appearance)
-                            : TabBarColors.inactiveText(for: appearance)
-                    )
-                    .saturation(saturation)
+                let isMuted = tab.isAudioMuted
+                let audioLabel = Bundle.module.localizedString(
+                    forKey: isMuted ? "tabContext.unmuteTab" : "tabContext.muteTab",
+                    value: isMuted ? "Unmute Tab" : "Mute Tab",
+                    table: nil
+                )
+                Button {
+                    onContextAction(.toggleAudioMute)
+                } label: {
+                    Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        .font(.system(size: max(6, accessoryFontSize - 4), weight: .semibold))
+                        .foregroundStyle(
+                            isSelected
+                                ? TabBarColors.activeText(for: appearance)
+                                : TabBarColors.inactiveText(for: appearance)
+                        )
+                        .padding(2)
+                        .background(
+                            Circle().fill(TabBarColors.activeTabBackground(for: appearance))
+                        )
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .saturation(saturation)
+                .safeHelp(audioLabel)
+                .accessibilityLabel(audioLabel)
+                .tabBarButtonAnimationsDisabled()
             } else if tab.showsNotificationBadge {
                 Circle()
                     .fill(TabBarColors.notificationBadge(for: appearance))
                     .frame(width: TabBarMetrics.notificationBadgeSize, height: TabBarMetrics.notificationBadgeSize)
+                    .allowsHitTesting(false)
             } else if tab.isDirty {
                 Circle()
                     .fill(TabBarColors.dirtyIndicator(for: appearance))
                     .frame(width: TabBarMetrics.dirtyIndicatorSize, height: TabBarMetrics.dirtyIndicatorSize)
                     .saturation(saturation)
+                    .allowsHitTesting(false)
             }
         }
     }
@@ -517,11 +567,19 @@ struct TabItemView: View {
         return fillsWidth ? .infinity : tabWidthRange.upperBound
     }
 
-    /// Fixed compact width used for icon-only pinned browser tabs.
+    /// Fixed compact width used for icon-only pinned browser tabs. When the tab can
+    /// show a control-shortcut hint, the width also reserves room for the hint pill so
+    /// holding the modifier never changes the tab's width (avoids tab-bar layout shift,
+    /// mirroring the standard layout's always-reserved hint slot).
     private var pinnedIconOnlyWidth: CGFloat {
-        TabItemStyling.pinnedIconOnlyWidth(
+        let reservedHint: CGFloat? = {
+            guard allowsShortcutHints, let shortcutHintLabel else { return nil }
+            return TabItemStyling.shortcutHintWidth(for: shortcutHintLabel)
+        }()
+        return TabItemStyling.pinnedIconOnlyWidth(
             iconSlotSize: scaledIconSize,
-            horizontalPadding: TabBarMetrics.tabHorizontalPadding
+            horizontalPadding: TabBarMetrics.tabHorizontalPadding,
+            reservedShortcutHintWidth: reservedHint
         )
     }
 
