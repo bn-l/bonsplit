@@ -161,7 +161,9 @@ enum TabItemStyling {
         accessorySlotSize: CGFloat,
         xOffset: Double
     ) -> CGFloat {
-        let reservesHint = tabShortcutHintsEnabled && isFocused
+        // Deliberately independent of `isFocused`: see the doc comment above.
+        _ = isFocused
+        let reservesHint = tabShortcutHintsEnabled
         return shortcutHintSlotWidth(
             label: shortcutHintSlotLabel(
                 label: shortcutHintLabel,
@@ -196,7 +198,11 @@ struct TabItemView: View {
     let saturation: Double
     let trailingSeparatorBottomInset: CGFloat
     let controlShortcutDigit: Int?
-    let allowsShortcutHints: Bool
+    /// Whether tab keyboard-shortcut hints are enabled at all (a global setting,
+    /// independent of which pane is focused). Drives the reserved hint-slot width.
+    let tabShortcutHintsEnabled: Bool
+    /// Whether this tab's pane is focused. Gates hint *visibility*, never width.
+    let isFocused: Bool
     let showsControlShortcutHint: Bool
     let shortcutModifierSymbol: String
     let allowsClose: Bool
@@ -476,6 +482,12 @@ struct TabItemView: View {
         return "\(shortcutModifierSymbol)\(controlShortcutDigit)"
     }
 
+    /// Hints are only ever shown on the focused pane; gating on focus here keeps
+    /// hint visibility scoped to the focused pane while leaving width untouched.
+    private var allowsShortcutHints: Bool {
+        isFocused && tabShortcutHintsEnabled
+    }
+
     private var showsShortcutHint: Bool {
         allowsShortcutHints && (showsControlShortcutHint || alwaysShowShortcutHints) && shortcutHintLabel != nil
     }
@@ -485,15 +497,14 @@ struct TabItemView: View {
     }
 
     private var shortcutHintSlotWidth: CGFloat {
-        // Reserve the wider shortcut-hint width whenever this tab has a hint,
-        // not only while the modifier is held. Modifier-hold should change
-        // opacity, not the tab strip's measured width.
-        TabItemStyling.shortcutHintSlotWidth(
-            label: TabItemStyling.shortcutHintSlotLabel(
-                label: shortcutHintLabel,
-                allowsShortcutHints: allowsShortcutHints
-            ),
-            showsShortcutHint: showsShortcutHint,
+        // Reserve the wider shortcut-hint width whenever hints are enabled and
+        // this tab has a digit, regardless of focus or modifier-hold. Both focus
+        // and modifier-hold change the pill's opacity, not the measured width, so
+        // the tab bar never shifts when a pane is focused or ⌃/⌘ is held.
+        TabItemStyling.reservedShortcutHintSlotWidth(
+            shortcutHintLabel: shortcutHintLabel,
+            tabShortcutHintsEnabled: tabShortcutHintsEnabled,
+            isFocused: isFocused,
             accessorySlotSize: accessorySlotSize,
             xOffset: controlShortcutHintXOffset
         )
