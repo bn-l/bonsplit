@@ -2467,6 +2467,48 @@ final class BonsplitTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(hiddenWidth, accessorySlotSize)
     }
 
+    func testTabShortcutHintSlotWidthDoesNotChangeWithFocus() {
+        let label = "⌃9"
+        let accessorySlotSize: CGFloat = 18
+
+        let focusedWidth = TabItemStyling.reservedShortcutHintSlotWidth(
+            shortcutHintLabel: label,
+            tabShortcutHintsEnabled: true,
+            isFocused: true,
+            accessorySlotSize: accessorySlotSize,
+            xOffset: 0
+        )
+        let unfocusedWidth = TabItemStyling.reservedShortcutHintSlotWidth(
+            shortcutHintLabel: label,
+            tabShortcutHintsEnabled: true,
+            isFocused: false,
+            accessorySlotSize: accessorySlotSize,
+            xOffset: 0
+        )
+
+        // Focusing a pane must not resize its tabs: both states reserve the same
+        // (wide) hint slot, so the tab bar never shifts as focus moves.
+        XCTAssertEqual(focusedWidth, unfocusedWidth)
+        XCTAssertGreaterThan(focusedWidth, accessorySlotSize)
+    }
+
+    func testTabShortcutHintSlotWidthCollapsesWhenHintsDisabled() {
+        let label = "⌃9"
+        let accessorySlotSize: CGFloat = 18
+
+        for isFocused in [true, false] {
+            let width = TabItemStyling.reservedShortcutHintSlotWidth(
+                shortcutHintLabel: label,
+                tabShortcutHintsEnabled: false,
+                isFocused: isFocused,
+                accessorySlotSize: accessorySlotSize,
+                xOffset: 0
+            )
+            // With hints disabled no hint width is reserved, regardless of focus.
+            XCTAssertEqual(width, accessorySlotSize)
+        }
+    }
+
     func testTabShortcutHintSlotLabelRequiresHintEligibility() {
         let label = "⌃9"
 

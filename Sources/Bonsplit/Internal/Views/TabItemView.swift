@@ -146,6 +146,33 @@ enum TabItemStyling {
         return max(accessorySlotSize, shortcutHintWidth(for: label) + positiveDebugInset)
     }
 
+    /// Width of a tab's trailing accessory slot, reserving room for the keyboard
+    /// shortcut hint pill.
+    ///
+    /// `isFocused` is accepted but MUST NOT affect the result. The reserved width
+    /// has to stay constant as focus moves between panes; if it shrinks when a
+    /// pane loses focus, every tab carrying a ⌃/⌘ digit visibly resizes and the
+    /// whole tab bar shifts on focus. Hint *visibility* depends on focus and
+    /// modifier-hold and is handled separately via opacity, not width.
+    static func reservedShortcutHintSlotWidth(
+        shortcutHintLabel: String?,
+        tabShortcutHintsEnabled: Bool,
+        isFocused: Bool,
+        accessorySlotSize: CGFloat,
+        xOffset: Double
+    ) -> CGFloat {
+        let reservesHint = tabShortcutHintsEnabled && isFocused
+        return shortcutHintSlotWidth(
+            label: shortcutHintSlotLabel(
+                label: shortcutHintLabel,
+                allowsShortcutHints: reservesHint
+            ),
+            showsShortcutHint: false,
+            accessorySlotSize: accessorySlotSize,
+            xOffset: xOffset
+        )
+    }
+
     static func resolvedFaviconImage(existing: NSImage?, incomingData: Data?) -> NSImage? {
         guard let incomingData else { return nil }
         if let decoded = NSImage(data: incomingData) {
