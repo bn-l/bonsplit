@@ -16,8 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pinned browser tabs (`kind == "browser"` with `isPinned == true`) now collapse to an
   icon-only chip (favicon only) sized to a compact fixed width, mirroring pinned tabs in
   macOS browsers. The full title stays available via the tab tooltip and accessibility
-  label, and a small corner badge preserves audio / unread / dirty activity signals.
-  Pinned terminal (and other non-browser) tabs keep their titled layout.
+  label. A small corner badge preserves audio / unread / dirty activity signals (the
+  audio badge stays click-to-mute via the existing `.toggleAudioMute` route), and the
+  control-shortcut number hint still appears (crossfading over the favicon on
+  modifier-hold) with its width reserved so the tab never resizes. Pinned terminal (and
+  other non-browser) tabs keep their titled layout.
 
 ## [1.1.1] - 2025-01-29
 
