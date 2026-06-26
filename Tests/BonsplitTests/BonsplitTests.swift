@@ -2446,6 +2446,37 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(range.upperBound, 220)
     }
 
+    func testIconOnlyPinnedRequiresPinnedBrowserTab() {
+        // Pinned browser tabs collapse to icon-only; everything else keeps its title.
+        XCTAssertTrue(TabItemStyling.isIconOnlyPinned(isPinned: true, kind: "browser"))
+        XCTAssertFalse(TabItemStyling.isIconOnlyPinned(isPinned: false, kind: "browser"))
+        XCTAssertFalse(TabItemStyling.isIconOnlyPinned(isPinned: true, kind: "terminal"))
+        XCTAssertFalse(TabItemStyling.isIconOnlyPinned(isPinned: true, kind: nil))
+        XCTAssertFalse(TabItemStyling.isIconOnlyPinned(isPinned: false, kind: "terminal"))
+    }
+
+    func testIconOnlyPinnedKindMatchesBrowserTabKindConstant() {
+        XCTAssertTrue(
+            TabItemStyling.isIconOnlyPinned(isPinned: true, kind: TabItemStyling.browserTabKind)
+        )
+    }
+
+    func testPinnedIconOnlyWidthHugsIconWithPadding() {
+        let width = TabItemStyling.pinnedIconOnlyWidth(iconSlotSize: 14, horizontalPadding: 6)
+
+        // Favicon slot + symmetric padding + breathing room.
+        XCTAssertEqual(width, ceil(14 + 6 * 2 + 6))
+        // The whole point: a pinned browser tab is narrower than the standard tab minimum.
+        XCTAssertLessThan(width, TabBarMetrics.tabMinWidth)
+    }
+
+    func testPinnedIconOnlyWidthClampsDegenerateInputs() {
+        // Non-positive icon/padding inputs are floored so the chip never collapses to zero.
+        let width = TabItemStyling.pinnedIconOnlyWidth(iconSlotSize: 0, horizontalPadding: -10)
+        XCTAssertEqual(width, ceil(1 + 0 + 6))
+        XCTAssertGreaterThan(width, 0)
+    }
+
     func testTabShortcutHintSlotWidthDoesNotChangeWithVisibility() {
         let label = "⌃9"
         let accessorySlotSize: CGFloat = 18
