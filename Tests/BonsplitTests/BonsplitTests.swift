@@ -2446,27 +2446,6 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(range.upperBound, 220)
     }
 
-    func testTabShortcutHintSlotWidthDoesNotChangeWithVisibility() {
-        let label = "⌃9"
-        let accessorySlotSize: CGFloat = 18
-
-        let hiddenWidth = TabItemStyling.shortcutHintSlotWidth(
-            label: label,
-            showsShortcutHint: false,
-            accessorySlotSize: accessorySlotSize,
-            xOffset: 0
-        )
-        let visibleWidth = TabItemStyling.shortcutHintSlotWidth(
-            label: label,
-            showsShortcutHint: true,
-            accessorySlotSize: accessorySlotSize,
-            xOffset: 0
-        )
-
-        XCTAssertEqual(hiddenWidth, visibleWidth)
-        XCTAssertGreaterThanOrEqual(hiddenWidth, accessorySlotSize)
-    }
-
     func testTabShortcutHintSlotWidthDoesNotChangeWithFocus() {
         let label = "⌃9"
         let accessorySlotSize: CGFloat = 18
@@ -2486,10 +2465,30 @@ final class BonsplitTests: XCTestCase {
             xOffset: 0
         )
 
-        // Focusing a pane must not resize its tabs: both states reserve the same
-        // (wide) hint slot, so the tab bar never shifts as focus moves.
+        // Focusing a pane must not resize its tabs: the reserved width is
+        // focus-independent, so the tab bar never shifts as focus moves.
         XCTAssertEqual(focusedWidth, unfocusedWidth)
-        XCTAssertGreaterThan(focusedWidth, accessorySlotSize)
+    }
+
+    func testTabShortcutHintSlotReservesOnlyAccessoryWidth() {
+        // The trailing accessory reserves just the close-button width. The
+        // shortcut-hint pill overlays that slot (mutually exclusive with the
+        // close button, non-interactive) instead of widening the tab, so a tab
+        // carrying a ⌃/⌘ digit is no wider than one without. Prevents the
+        // "digit tabs are permanently ~11pt too wide" regression.
+        let label = "⌃9"
+        let accessorySlotSize: CGFloat = 18
+
+        for isFocused in [true, false] {
+            let width = TabItemStyling.reservedShortcutHintSlotWidth(
+                shortcutHintLabel: label,
+                tabShortcutHintsEnabled: true,
+                isFocused: isFocused,
+                accessorySlotSize: accessorySlotSize,
+                xOffset: 0
+            )
+            XCTAssertEqual(width, accessorySlotSize)
+        }
     }
 
     func testTabShortcutHintSlotWidthCollapsesWhenHintsDisabled() {
@@ -2507,30 +2506,6 @@ final class BonsplitTests: XCTestCase {
             // With hints disabled no hint width is reserved, regardless of focus.
             XCTAssertEqual(width, accessorySlotSize)
         }
-    }
-
-    func testTabShortcutHintSlotLabelRequiresHintEligibility() {
-        let label = "⌃9"
-
-        XCTAssertEqual(
-            TabItemStyling.shortcutHintSlotLabel(label: label, allowsShortcutHints: true),
-            label
-        )
-        XCTAssertNil(
-            TabItemStyling.shortcutHintSlotLabel(label: label, allowsShortcutHints: false)
-        )
-    }
-
-    func testTabShortcutHintWidthUsesSharedPillPadding() {
-        let label = "⌘9"
-        let textWidth = (label as NSString).size(
-            withAttributes: TabControlShortcutHintStyle.measurementAttributes
-        ).width
-
-        XCTAssertEqual(
-            TabItemStyling.shortcutHintWidth(for: label),
-            ceil(textWidth) + (TabControlShortcutHintStyle.horizontalPadding * 2)
-        )
     }
 
     func testTabShortcutHintStyleMatchesCommandHintPillFont() {
