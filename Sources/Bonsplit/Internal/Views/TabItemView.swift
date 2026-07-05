@@ -229,6 +229,7 @@ struct TabItemView: View {
     let allowsClose: Bool
     let contextMenuState: TabContextMenuState
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
+    let forkConversationOpenAvailabilityProvider: () -> Bool?
     let onSelect: () -> Void
     let onClose: (TabCloseRequestSource) -> Void
     let onZoomToggle: () -> Void
@@ -281,7 +282,8 @@ struct TabItemView: View {
             snapshot: TabContextMenuSnapshot(
                 tabId: tab.id,
                 state: contextMenuState,
-                moveDestinationsProvider: moveDestinationsProvider
+                moveDestinationsProvider: moveDestinationsProvider,
+                forkConversationOpenAvailabilityProvider: forkConversationOpenAvailabilityProvider
             ),
             onContextAction: onContextAction,
             onMoveDestination: onMoveDestination
@@ -1112,6 +1114,7 @@ struct TabContextMenuSnapshot {
     let tabId: UUID
     let state: TabContextMenuState
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
+    let forkConversationOpenAvailabilityProvider: () -> Bool?
 }
 
 final class TabContextMenuActionTarget: NSObject {
@@ -1137,7 +1140,10 @@ enum TabContextMenuBuilder {
         snapshot: TabContextMenuSnapshot,
         target: TabContextMenuActionTarget
     ) -> NSMenu {
-        let state = snapshot.state
+        var state = snapshot.state
+        if let canForkConversation = snapshot.forkConversationOpenAvailabilityProvider() {
+            state.canForkConversation = canForkConversation
+        }
         let menu = NSMenu()
         menu.autoenablesItems = false
 

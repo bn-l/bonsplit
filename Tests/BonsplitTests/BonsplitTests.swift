@@ -1673,7 +1673,8 @@ final class BonsplitTests: XCTestCase {
                 return [
                     TabContextMoveDestination(id: "workspace:abc", title: "Workspace A", isEnabled: false)
                 ]
-            }
+            },
+            forkConversationOpenAvailabilityProvider: { nil }
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
@@ -1720,7 +1721,8 @@ final class BonsplitTests: XCTestCase {
                 hasSplits: false,
                 shortcuts: [:]
             ),
-            moveDestinationsProvider: { [] }
+            moveDestinationsProvider: { [] },
+            forkConversationOpenAvailabilityProvider: { nil }
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
@@ -1754,7 +1756,8 @@ final class BonsplitTests: XCTestCase {
                 hasSplits: false,
                 shortcuts: [:]
             ),
-            moveDestinationsProvider: { [] }
+            moveDestinationsProvider: { [] },
+            forkConversationOpenAvailabilityProvider: { nil }
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
@@ -1790,7 +1793,8 @@ final class BonsplitTests: XCTestCase {
         let snapshot = TabContextMenuSnapshot(
             tabId: UUID(),
             state: state,
-            moveDestinationsProvider: { [] }
+            moveDestinationsProvider: { [] },
+            forkConversationOpenAvailabilityProvider: { nil }
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
