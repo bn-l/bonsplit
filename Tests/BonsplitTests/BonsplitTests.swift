@@ -1816,6 +1816,45 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabContextMenuBuilderKeepsForkConversationVisibleWhenOpenAvailabilityIsRefreshing() throws {
+        let target = TabContextMenuActionTarget()
+        let state = TabContextMenuState(
+            isPinned: false,
+            isUnread: false,
+            isBrowser: false,
+            isAudioMuted: false,
+            isTerminal: true,
+            hasCustomTitle: false,
+            canCloseToLeft: true,
+            canCloseToRight: true,
+            canCloseOthers: true,
+            canMoveToNewWorkspace: false,
+            canMoveToLeftPane: false,
+            canMoveToRightPane: false,
+            canForkConversation: true,
+            forkConversationDefaultAction: .forkConversationLeft,
+            isZoomed: false,
+            hasSplits: false,
+            shortcuts: [:]
+        )
+        let snapshot = TabContextMenuSnapshot(
+            tabId: UUID(),
+            state: state,
+            moveDestinationsProvider: { [] },
+            forkConversationOpenAvailabilityProvider: { false }
+        )
+
+        let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
+        let forkItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation" })
+        let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation To" })
+        let destinationItems = try XCTUnwrap(forkSubmenuItem.submenu?.items.filter { !$0.isSeparatorItem })
+
+        XCTAssertFalse(forkItem.isEnabled)
+        XCTAssertFalse(forkSubmenuItem.isEnabled)
+        XCTAssertEqual(destinationItems.map(\.isEnabled), Array(repeating: false, count: 6))
+    }
+
+    @MainActor
     func testDoubleClickingEmptyTrailingTabBarSpaceRequestsNewTerminalTab() {
         let appearance = BonsplitConfiguration.Appearance()
         let configuration = BonsplitConfiguration(appearance: appearance)
