@@ -1,6 +1,7 @@
 import XCTest
 @testable import Bonsplit
 import AppKit
+import Observation
 import QuartzCore
 import SwiftUI
 
@@ -176,6 +177,49 @@ final class BonsplitTests: XCTestCase {
         let tab = controller.tab(tabId)
         XCTAssertEqual(tab?.title, "Updated")
         XCTAssertEqual(tab?.isDirty, true)
+    }
+
+    @MainActor
+    func testNoopTabUpdateDoesNotInvalidateObservedTabMetadata() {
+        let controller = BonsplitController()
+        let tabId = controller.createTab(
+            title: "Original",
+            hasCustomTitle: true,
+            icon: "doc",
+            kind: "terminal",
+            isDirty: true,
+            showsNotificationBadge: true,
+            isLoading: true,
+            isAudioMuted: true,
+            isAudioPlaying: true,
+            isPinned: true
+        )!
+
+        var didInvalidate = false
+        withObservationTracking {
+            _ = controller.tab(tabId)
+        } onChange: {
+            didInvalidate = true
+        }
+
+        controller.updateTab(
+            tabId,
+            title: "Original",
+            icon: .some("doc"),
+            kind: .some("terminal"),
+            hasCustomTitle: true,
+            isDirty: true,
+            showsNotificationBadge: true,
+            isLoading: true,
+            isAudioMuted: true,
+            isAudioPlaying: true,
+            isPinned: true
+        )
+
+        XCTAssertFalse(
+            didInvalidate,
+            "Updating a tab with identical metadata should not invalidate SwiftUI observers of tab metadata."
+        )
     }
 
     @MainActor
