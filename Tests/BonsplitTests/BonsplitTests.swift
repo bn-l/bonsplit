@@ -145,6 +145,10 @@ final class BonsplitTests: XCTestCase {
         }
     }
 
+    private final class ObservationInvalidationFlag: @unchecked Sendable {
+        var didInvalidate = false
+    }
+
     @MainActor
     func testControllerCreation() {
         let controller = BonsplitController()
@@ -195,11 +199,11 @@ final class BonsplitTests: XCTestCase {
             isPinned: true
         )!
 
-        var didInvalidate = false
+        let invalidationFlag = ObservationInvalidationFlag()
         withObservationTracking {
             _ = controller.tab(tabId)
         } onChange: {
-            didInvalidate = true
+            invalidationFlag.didInvalidate = true
         }
 
         controller.updateTab(
@@ -217,7 +221,7 @@ final class BonsplitTests: XCTestCase {
         )
 
         XCTAssertFalse(
-            didInvalidate,
+            invalidationFlag.didInvalidate,
             "Updating a tab with identical metadata should not invalidate SwiftUI observers of tab metadata."
         )
     }

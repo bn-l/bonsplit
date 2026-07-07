@@ -264,6 +264,20 @@ public final class BonsplitController {
         isPinned: Bool? = nil
     ) {
         guard let (pane, tabIndex) = findTabInternal(tabId) else { return }
+        let currentTab = pane.tabs[tabIndex]
+        let didChange =
+            title.map { currentTab.title != $0 } ?? false ||
+            icon.map { currentTab.icon != $0 } ?? false ||
+            iconImageData.map { currentTab.iconImageData != $0 } ?? false ||
+            kind.map { currentTab.kind != $0 } ?? false ||
+            hasCustomTitle.map { currentTab.hasCustomTitle != $0 } ?? false ||
+            isDirty.map { currentTab.isDirty != $0 } ?? false ||
+            showsNotificationBadge.map { currentTab.showsNotificationBadge != $0 } ?? false ||
+            isLoading.map { currentTab.isLoading != $0 } ?? false ||
+            isAudioMuted.map { currentTab.isAudioMuted != $0 } ?? false ||
+            isAudioPlaying.map { currentTab.isAudioPlaying != $0 } ?? false ||
+            isPinned.map { currentTab.isPinned != $0 } ?? false
+        guard didChange else { return }
 
         if let title = title {
             pane.tabs[tabIndex].title = title
