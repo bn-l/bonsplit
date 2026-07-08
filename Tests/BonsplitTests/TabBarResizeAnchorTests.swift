@@ -65,6 +65,50 @@ final class TabBarResizeAnchorTests: XCTestCase {
         )
     }
 
+    func testAsyncClampRetryDoesNotUndoLaterValidOffset() async throws {
+        let harness = try makeTabBarHarness(
+            initialSize: NSSize(width: 240, height: TabBarMetrics.barHeight),
+            tabCount: 8,
+            selectedIndex: 7
+        )
+        defer { harness.window.orderOut(nil) }
+
+        let scrollView = try tabBarScrollView(in: harness.hostingView)
+        let initialMaxOffset = maxHorizontalOffset(in: scrollView)
+        XCTAssertGreaterThan(initialMaxOffset, 0)
+
+        scrollView.contentView.scroll(to: NSPoint(x: initialMaxOffset, y: 0))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+
+        var laterValidOffset: CGFloat?
+        let laterScrollApplied = expectation(description: "later valid scroll applied")
+        DispatchQueue.main.async {
+            let validOffset = self.maxHorizontalOffset(in: scrollView) / 2
+            laterValidOffset = validOffset
+            scrollView.contentView.scroll(to: NSPoint(x: validOffset, y: 0))
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+            laterScrollApplied.fulfill()
+        }
+
+        harness.window.setContentSize(NSSize(width: 360, height: TabBarMetrics.barHeight))
+        harness.hostingView.frame = harness.window.contentView?.bounds ?? harness.hostingView.frame
+        harness.window.contentView?.layoutSubtreeIfNeeded()
+        harness.hostingView.layoutSubtreeIfNeeded()
+
+        let queuedCorrectionsDrained = expectation(description: "queued corrections drained")
+        DispatchQueue.main.async {
+            queuedCorrectionsDrained.fulfill()
+        }
+        await fulfillment(of: [laterScrollApplied, queuedCorrectionsDrained], timeout: 1)
+        let expectedOffset = try XCTUnwrap(laterValidOffset)
+        XCTAssertEqual(
+            scrollView.contentView.bounds.origin.x,
+            expectedOffset,
+            accuracy: 0.5,
+            "The queued clamp retry must not overwrite a later scroll position that is already inside the resized tab strip's valid range."
+        )
+    }
+
     private struct TabBarHarness {
         let window: NSWindow
         let hostingView: NSView

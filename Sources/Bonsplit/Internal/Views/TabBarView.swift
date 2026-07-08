@@ -224,6 +224,11 @@ private final class TabBarScrollViewBridge: ObservableObject {
         let viewportWidth: CGFloat
     }
 
+    private enum AsyncCorrection {
+        case fixedTarget
+        case clampToValidRange
+    }
+
     weak var scrollView: NSScrollView?
 
     func attach(_ scrollView: NSScrollView?) {
@@ -296,7 +301,8 @@ private final class TabBarScrollViewBridge: ObservableObject {
             reason: reason,
             event: "tab.bar.clampOffset",
             asyncEvent: "tab.bar.clampOffset.async",
-            metrics: metrics
+            metrics: metrics,
+            asyncCorrection: .clampToValidRange
         )
     }
 
@@ -311,7 +317,8 @@ private final class TabBarScrollViewBridge: ObservableObject {
             reason: reason,
             event: "tab.bar.resetLeading",
             asyncEvent: "tab.bar.resetLeading.async",
-            metrics: metrics
+            metrics: metrics,
+            asyncCorrection: .fixedTarget
         )
     }
 
@@ -320,7 +327,8 @@ private final class TabBarScrollViewBridge: ObservableObject {
         reason: String,
         event: String,
         asyncEvent: String,
-        metrics: ScrollMetrics
+        metrics: ScrollMetrics,
+        asyncCorrection: AsyncCorrection
     ) {
         guard abs(targetOffset - metrics.offset) > 0.5 else { return }
         guard let scrollView else { return }
@@ -345,21 +353,33 @@ private final class TabBarScrollViewBridge: ObservableObject {
             guard let scrollView else { return }
             let clipView = scrollView.contentView
             let asyncOffset = clipView.bounds.origin.x
-            guard abs(asyncOffset - targetOffset) > 0.5 else { return }
-#if DEBUG
-            let documentWidth = max(
+            let asyncDocumentWidth = max(
                 scrollView.documentView?.frame.width ?? 0,
                 scrollView.documentView?.bounds.width ?? 0
             )
+            let asyncViewportWidth = clipView.bounds.width
+            let asyncTargetOffset: CGFloat
+
+            switch asyncCorrection {
+            case .fixedTarget:
+                asyncTargetOffset = targetOffset
+            case .clampToValidRange:
+                guard asyncViewportWidth > 0 else { return }
+                let asyncMaxOffset = max(0, asyncDocumentWidth - asyncViewportWidth)
+                asyncTargetOffset = min(max(asyncOffset, 0), asyncMaxOffset)
+            }
+
+            guard abs(asyncOffset - asyncTargetOffset) > 0.5 else { return }
+#if DEBUG
             dlog(
                 "\(asyncEvent) reason=\(reason) " +
                 "offset=\(Int(asyncOffset.rounded())) " +
-                "target=\(Int(targetOffset.rounded())) " +
-                "doc=\(Int(documentWidth.rounded())) " +
-                "viewport=\(Int(clipView.bounds.width.rounded()))"
+                "target=\(Int(asyncTargetOffset.rounded())) " +
+                "doc=\(Int(asyncDocumentWidth.rounded())) " +
+                "viewport=\(Int(asyncViewportWidth.rounded()))"
             )
 #endif
-            clipView.scroll(to: NSPoint(x: targetOffset, y: clipView.bounds.origin.y))
+            clipView.scroll(to: NSPoint(x: asyncTargetOffset, y: clipView.bounds.origin.y))
             scrollView.reflectScrolledClipView(clipView)
         }
     }
