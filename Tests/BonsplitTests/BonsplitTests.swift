@@ -184,12 +184,34 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabIconAssetCreateUpdateClearRoundTrips() {
+        let controller = BonsplitController()
+        let tabId = controller.createTab(
+            title: "Agent",
+            icon: "terminal.fill",
+            iconAsset: "AgentIcons/Claude"
+        )!
+
+        XCTAssertEqual(controller.tab(tabId)?.iconAsset, "AgentIcons/Claude")
+
+        controller.updateTab(tabId, title: "Agent renamed")
+        XCTAssertEqual(controller.tab(tabId)?.iconAsset, "AgentIcons/Claude")
+
+        controller.updateTab(tabId, iconAsset: .some("AgentIcons/Codex"))
+        XCTAssertEqual(controller.tab(tabId)?.iconAsset, "AgentIcons/Codex")
+
+        controller.updateTab(tabId, iconAsset: .some(nil))
+        XCTAssertNil(controller.tab(tabId)?.iconAsset)
+    }
+
+    @MainActor
     func testNoopTabUpdateDoesNotInvalidateObservedTabMetadata() {
         let controller = BonsplitController()
         let tabId = controller.createTab(
             title: "Original",
             hasCustomTitle: true,
             icon: "doc",
+            iconAsset: "AgentIcons/Claude",
             kind: "terminal",
             isDirty: true,
             showsNotificationBadge: true,
@@ -210,6 +232,7 @@ final class BonsplitTests: XCTestCase {
             tabId,
             title: "Original",
             icon: .some("doc"),
+            iconAsset: .some("AgentIcons/Claude"),
             kind: .some("terminal"),
             hasCustomTitle: true,
             isDirty: true,
