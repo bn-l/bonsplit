@@ -3,6 +3,8 @@ import Foundation
 
 #if DEBUG
 enum TabGeometryDebugLog {
+    static let isEnabled = ProcessInfo.processInfo.environment["CMUX_TAB_GEOMETRY_LOG"] != nil
+
     private static let queue = DispatchQueue(label: "com.bonsplit.tab-geometry-debug-log")
     private static let sink = TabGeometryDebugLogSink()
 
@@ -15,6 +17,7 @@ enum TabGeometryDebugLog {
         isSelected: Bool,
         showsShortcutHint: Bool
     ) {
+        guard isEnabled else { return }
         queue.async {
             sink.write(
                 tabId: tabId,
@@ -46,6 +49,7 @@ enum TabGeometryDebugLog {
         isSelected: Bool,
         showsShortcutHint: Bool
     ) {
+        guard isEnabled else { return }
         queue.async {
             sink.write(
                 tabId: tabId,
@@ -152,6 +156,8 @@ private final class TabGeometryDebugLogSink {
 }
 #else
 enum TabGeometryDebugLog {
+    static let isEnabled = false
+
     static func geometry(
         tabId: UUID,
         which: String,

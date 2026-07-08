@@ -35,18 +35,22 @@ extension View {
     @ViewBuilder
     func tabGeometryDebugFrame(_ onFrame: @escaping (CGRect) -> Void) -> some View {
 #if DEBUG
-        background(
-            GeometryReader { proxy in
-                let frame = proxy.frame(in: .global)
-                Color.clear
-                    .onAppear {
-                        onFrame(frame)
-                    }
-                    .onChange(of: frame) { _, newFrame in
-                        onFrame(newFrame)
-                    }
-            }
-        )
+        if TabGeometryDebugLog.isEnabled {
+            background(
+                GeometryReader { proxy in
+                    let frame = proxy.frame(in: .global)
+                    Color.clear
+                        .onAppear {
+                            onFrame(frame)
+                        }
+                        .onChange(of: frame) { _, newFrame in
+                            onFrame(newFrame)
+                        }
+                }
+            )
+        } else {
+            self
+        }
 #else
         self
 #endif
@@ -55,7 +59,11 @@ extension View {
     @ViewBuilder
     func tabGeometryDebugOnAppear(_ action: @escaping () -> Void) -> some View {
 #if DEBUG
-        onAppear(perform: action)
+        if TabGeometryDebugLog.isEnabled {
+            onAppear(perform: action)
+        } else {
+            self
+        }
 #else
         self
 #endif
@@ -67,8 +75,12 @@ extension View {
         perform action: @escaping (Value) -> Void
     ) -> some View {
 #if DEBUG
-        onChange(of: value) { _, newValue in
-            action(newValue)
+        if TabGeometryDebugLog.isEnabled {
+            onChange(of: value) { _, newValue in
+                action(newValue)
+            }
+        } else {
+            self
         }
 #else
         self
