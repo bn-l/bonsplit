@@ -291,22 +291,13 @@ private final class TabBarScrollViewBridge: ObservableObject {
 
         let maxOffset = max(0, metrics.documentWidth - metrics.viewportWidth)
         let clampedOffset = min(max(metrics.offset, 0), maxOffset)
-        guard abs(clampedOffset - metrics.offset) > 0.5 else { return }
-        guard let scrollView else { return }
-
-        #if DEBUG
-        dlog(
-            "tab.bar.clampOffset reason=\(reason) " +
-            "offset=\(Int(metrics.offset.rounded())) " +
-            "clamped=\(Int(clampedOffset.rounded())) " +
-            "doc=\(Int(metrics.documentWidth.rounded())) " +
-            "viewport=\(Int(metrics.viewportWidth.rounded()))"
+        setHorizontalOffset(
+            clampedOffset,
+            reason: reason,
+            event: "tab.bar.clampOffset",
+            asyncEvent: "tab.bar.clampOffset.async",
+            metrics: metrics
         )
-        #endif
-
-        let clipView = scrollView.contentView
-        clipView.scroll(to: NSPoint(x: clampedOffset, y: clipView.bounds.origin.y))
-        scrollView.reflectScrolledClipView(clipView)
     }
 
     func resetToLeadingEdgeIfNeeded(reason: String) {
@@ -315,40 +306,60 @@ private final class TabBarScrollViewBridge: ObservableObject {
         let currentOffset = metrics.offset
         guard abs(currentOffset) > 0.5 else { return }
 
+        setHorizontalOffset(
+            0,
+            reason: reason,
+            event: "tab.bar.resetLeading",
+            asyncEvent: "tab.bar.resetLeading.async",
+            metrics: metrics
+        )
+    }
+
+    private func setHorizontalOffset(
+        _ targetOffset: CGFloat,
+        reason: String,
+        event: String,
+        asyncEvent: String,
+        metrics: ScrollMetrics
+    ) {
+        guard abs(targetOffset - metrics.offset) > 0.5 else { return }
         guard let scrollView else { return }
-        #if DEBUG
+
+#if DEBUG
         dlog(
-            "tab.bar.resetLeading reason=\(reason) " +
-            "offset=\(Int(currentOffset.rounded())) " +
+            "\(event) reason=\(reason) " +
+            "offset=\(Int(metrics.offset.rounded())) " +
+            "target=\(Int(targetOffset.rounded())) " +
             "doc=\(Int(metrics.documentWidth.rounded())) " +
             "viewport=\(Int(metrics.viewportWidth.rounded()))"
         )
 #endif
         let clipView = scrollView.contentView
-        clipView.scroll(to: NSPoint(x: 0, y: clipView.bounds.origin.y))
+        clipView.scroll(to: NSPoint(x: targetOffset, y: clipView.bounds.origin.y))
         scrollView.reflectScrolledClipView(clipView)
 
         // SwiftUI's ScrollView can briefly restore the stale offset during the same
         // layout cycle. Re-apply the correction on the next turn to keep split-pane
-        // tab bars pinned to the leading edge once they stop overflowing.
+        // tab bars pinned or clamped once the geometry settles.
         DispatchQueue.main.async { [weak scrollView] in
             guard let scrollView else { return }
             let clipView = scrollView.contentView
             let asyncOffset = clipView.bounds.origin.x
-            guard abs(asyncOffset) > 0.5 else { return }
+            guard abs(asyncOffset - targetOffset) > 0.5 else { return }
 #if DEBUG
             let documentWidth = max(
                 scrollView.documentView?.frame.width ?? 0,
                 scrollView.documentView?.bounds.width ?? 0
             )
             dlog(
-                "tab.bar.resetLeading.async reason=\(reason) " +
+                "\(asyncEvent) reason=\(reason) " +
                 "offset=\(Int(asyncOffset.rounded())) " +
+                "target=\(Int(targetOffset.rounded())) " +
                 "doc=\(Int(documentWidth.rounded())) " +
                 "viewport=\(Int(clipView.bounds.width.rounded()))"
             )
 #endif
-            clipView.scroll(to: NSPoint(x: 0, y: clipView.bounds.origin.y))
+            clipView.scroll(to: NSPoint(x: targetOffset, y: clipView.bounds.origin.y))
             scrollView.reflectScrolledClipView(clipView)
         }
     }
