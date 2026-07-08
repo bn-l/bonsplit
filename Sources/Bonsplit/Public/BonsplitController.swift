@@ -90,6 +90,12 @@ public final class BonsplitController {
     /// fall back to `.forkConversationRight`.
     @ObservationIgnored public var tabContextForkConversationDefaultActionProvider: ((TabID, PaneID) -> TabContextAction)?
 
+    /// Host-provided synchronous check that decides whether the tab context menu should
+    /// surface a "Disconnect SSH" action for the tab (e.g. a terminal surface attached to
+    /// a host-managed remote connection). Return `true` to show the item, `false` (or omit
+    /// the provider) to hide it.
+    @ObservationIgnored public var tabContextDisconnectRemoteAvailabilityProvider: ((TabID, PaneID) -> Bool)?
+
     /// Called when the user explicitly requests to close a tab from the tab strip UI.
     /// Internal host-driven closes should not use this hook.
     @ObservationIgnored public var onTabCloseRequest: ((_ tabId: TabID, _ paneId: PaneID, _ source: TabCloseRequestSource) -> Void)?
@@ -143,6 +149,7 @@ public final class BonsplitController {
         isAudioMuted: Bool = false,
         isAudioPlaying: Bool = false,
         isPinned: Bool = false,
+        showsRemoteIndicator: Bool = false,
         inPane pane: PaneID? = nil
     ) -> TabID? {
         let tabId = TabID()
@@ -158,7 +165,8 @@ public final class BonsplitController {
             isLoading: isLoading,
             isAudioMuted: isAudioMuted,
             isAudioPlaying: isAudioPlaying,
-            isPinned: isPinned
+            isPinned: isPinned,
+            showsRemoteIndicator: showsRemoteIndicator
         )
         let targetPane = pane ?? focusedPaneId ?? PaneID(id: internalController.rootNode.allPaneIds.first!.id)
 
@@ -197,7 +205,8 @@ public final class BonsplitController {
             isLoading: isLoading,
             isAudioMuted: isAudioMuted,
             isAudioPlaying: isAudioPlaying,
-            isPinned: isPinned
+            isPinned: isPinned,
+            showsRemoteIndicator: showsRemoteIndicator
         )
         internalController.addTab(tabItem, toPane: PaneID(id: targetPane.id), atIndex: insertIndex)
 
@@ -261,7 +270,8 @@ public final class BonsplitController {
         isLoading: Bool? = nil,
         isAudioMuted: Bool? = nil,
         isAudioPlaying: Bool? = nil,
-        isPinned: Bool? = nil
+        isPinned: Bool? = nil,
+        showsRemoteIndicator: Bool? = nil
     ) {
         guard let (pane, tabIndex) = findTabInternal(tabId) else { return }
         let currentTab = pane.tabs[tabIndex]
@@ -276,7 +286,8 @@ public final class BonsplitController {
             isLoading.map { currentTab.isLoading != $0 } ?? false ||
             isAudioMuted.map { currentTab.isAudioMuted != $0 } ?? false ||
             isAudioPlaying.map { currentTab.isAudioPlaying != $0 } ?? false ||
-            isPinned.map { currentTab.isPinned != $0 } ?? false
+            isPinned.map { currentTab.isPinned != $0 } ?? false ||
+            showsRemoteIndicator.map { currentTab.showsRemoteIndicator != $0 } ?? false
         guard didChange else { return }
 
         if let title = title {
@@ -311,6 +322,9 @@ public final class BonsplitController {
         }
         if let isPinned = isPinned {
             pane.tabs[tabIndex].isPinned = isPinned
+        }
+        if let showsRemoteIndicator = showsRemoteIndicator {
+            pane.tabs[tabIndex].showsRemoteIndicator = showsRemoteIndicator
         }
     }
 
@@ -477,7 +491,8 @@ public final class BonsplitController {
                 isLoading: tab.isLoading,
                 isAudioMuted: tab.isAudioMuted,
                 isAudioPlaying: tab.isAudioPlaying,
-                isPinned: tab.isPinned
+                isPinned: tab.isPinned,
+                showsRemoteIndicator: tab.showsRemoteIndicator
             )
         } else {
             internalTab = nil
@@ -543,7 +558,8 @@ public final class BonsplitController {
             isLoading: tab.isLoading,
             isAudioMuted: tab.isAudioMuted,
             isAudioPlaying: tab.isAudioPlaying,
-            isPinned: tab.isPinned
+            isPinned: tab.isPinned,
+            showsRemoteIndicator: tab.showsRemoteIndicator
         )
 
         // Perform split with insertion side.

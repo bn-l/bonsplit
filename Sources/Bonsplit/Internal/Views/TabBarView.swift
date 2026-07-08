@@ -918,6 +918,7 @@ struct TabContextMenuState {
     let isFullWidthTabMode: Bool
     let hasSplits: Bool
     let shortcuts: [TabContextAction: KeyboardShortcut]
+    var canDisconnectRemote: Bool = false
 
     var canMarkAsUnread: Bool {
         !isUnread
@@ -945,7 +946,8 @@ struct TabContextMenuState {
         isZoomed: Bool,
         isFullWidthTabMode: Bool = false,
         hasSplits: Bool,
-        shortcuts: [TabContextAction: KeyboardShortcut]
+        shortcuts: [TabContextAction: KeyboardShortcut],
+        canDisconnectRemote: Bool = false
     ) {
         self.isPinned = isPinned
         self.isUnread = isUnread
@@ -965,6 +967,7 @@ struct TabContextMenuState {
         self.isFullWidthTabMode = isFullWidthTabMode
         self.hasSplits = hasSplits
         self.shortcuts = shortcuts
+        self.canDisconnectRemote = canDisconnectRemote
     }
 
     @MainActor
@@ -1006,7 +1009,8 @@ struct TabContextMenuState {
             isZoomed: splitViewController.zoomedPaneId == pane.id,
             isFullWidthTabMode: pane.isFullWidthTabMode,
             hasSplits: splitViewController.rootNode.allPaneIds.count > 1,
-            shortcuts: controller.contextMenuShortcuts
+            shortcuts: controller.contextMenuShortcuts,
+            canDisconnectRemote: controller.tabContextDisconnectRemoteAvailabilityProvider?(TabID(id: tab.id), pane.id) ?? false
         )
     }
 }

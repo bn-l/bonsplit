@@ -342,6 +342,19 @@ struct TabItemView: View {
                     )
                     .saturation(saturation)
 
+                if tab.showsRemoteIndicator {
+                    Image(systemName: "network")
+                        .font(.system(size: accessoryFontSize, weight: .semibold))
+                        .foregroundStyle(
+                            (isSelected
+                                ? TabBarColors.activeText(for: appearance)
+                                : TabBarColors.inactiveText(for: appearance))
+                                .opacity(0.78)
+                        )
+                        .saturation(saturation)
+                        .accessibilityHidden(true)
+                }
+
                 // Chrome/Safari-style audio affordance: a speaker glyph appears
                 // when the tab is producing audible audio (click to mute) or has
                 // been muted (click to unmute). Reuses the existing
@@ -753,6 +766,9 @@ struct TabItemView: View {
         if tab.isDirty { parts.append("Modified") }
         if tab.isAudioMuted {
             parts.append(Bundle.module.localizedString(forKey: "tabContext.audioMutedAccessibility", value: "Muted", table: nil))
+        }
+        if tab.showsRemoteIndicator {
+            parts.append(Bundle.module.localizedString(forKey: "tabContext.remoteConnectedAccessibility", value: "Connected over SSH", table: nil))
         }
         if showsZoomIndicator { parts.append("Zoomed") }
         return parts.joined(separator: ", ")
@@ -1268,6 +1284,17 @@ enum TabContextMenuBuilder {
             addAction(
                 title: localized("tabContext.duplicateTab", defaultValue: "Duplicate Tab"),
                 action: .duplicate,
+                state: state,
+                target: target,
+                to: menu
+            )
+        }
+
+        if state.canDisconnectRemote {
+            menu.addItem(.separator())
+            addAction(
+                title: localized("tabContext.disconnectRemote", defaultValue: "Disconnect SSH"),
+                action: .disconnectRemote,
                 state: state,
                 target: target,
                 to: menu
