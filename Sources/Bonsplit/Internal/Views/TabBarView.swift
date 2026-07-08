@@ -279,6 +279,36 @@ private final class TabBarScrollViewBridge: ObservableObject {
         resetToLeadingEdgeIfNeeded(reason: reason)
     }
 
+    func preserveCurrentOffsetAfterLayoutChange(reason: String) {
+        guard let metrics = currentMetrics(), metrics.viewportWidth > 0 else { return }
+        guard !TabBarStyling.shouldKeepLeadingAligned(
+            contentWidth: metrics.documentWidth,
+            containerWidth: metrics.viewportWidth
+        ) else {
+            resetToLeadingEdgeIfNeeded(reason: reason)
+            return
+        }
+
+        let maxOffset = max(0, metrics.documentWidth - metrics.viewportWidth)
+        let clampedOffset = min(max(metrics.offset, 0), maxOffset)
+        guard abs(clampedOffset - metrics.offset) > 0.5 else { return }
+        guard let scrollView else { return }
+
+        #if DEBUG
+        dlog(
+            "tab.bar.clampOffset reason=\(reason) " +
+            "offset=\(Int(metrics.offset.rounded())) " +
+            "clamped=\(Int(clampedOffset.rounded())) " +
+            "doc=\(Int(metrics.documentWidth.rounded())) " +
+            "viewport=\(Int(metrics.viewportWidth.rounded()))"
+        )
+        #endif
+
+        let clipView = scrollView.contentView
+        clipView.scroll(to: NSPoint(x: clampedOffset, y: clipView.bounds.origin.y))
+        scrollView.reflectScrolledClipView(clipView)
+    }
+
     func resetToLeadingEdgeIfNeeded(reason: String) {
         guard let metrics = currentMetrics() else { return }
 
@@ -1315,10 +1345,10 @@ struct TabBarView: View {
                     }
                     .onChange(of: containerGeo.size.width) { _, newWidth in
                         containerWidth = newWidth
-                        scrollToPreferredTarget(proxy, selectedTabId: pane.selectedTabId)
+                        scrollViewBridge.preserveCurrentOffsetAfterLayoutChange(reason: "containerWidth")
                     }
                     .onChange(of: contentWidth) { _, _ in
-                        scrollToPreferredTarget(proxy, selectedTabId: pane.selectedTabId)
+                        scrollViewBridge.preserveCurrentOffsetAfterLayoutChange(reason: "contentWidth")
                     }
                     .onChange(of: pane.selectedTabId) { _, newTabId in
                         scrollToPreferredTarget(proxy, selectedTabId: newTabId)
