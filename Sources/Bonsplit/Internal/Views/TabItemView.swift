@@ -312,7 +312,8 @@ struct TabItemView: View {
             // Pinned browser tabs pin both bounds to a compact icon-only width.
             maxWidth: frameMaxWidth,
             minHeight: tabHeight,
-            maxHeight: tabHeight
+            maxHeight: tabHeight,
+            alignment: isIconOnlyPinned ? .center : .leading
         )
         // Fixed mode: size each tab to its own content and ignore the width the
         // tab strip would otherwise propose. Without this the flexible `maxWidth`
