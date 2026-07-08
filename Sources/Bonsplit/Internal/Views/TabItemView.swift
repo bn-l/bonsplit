@@ -487,6 +487,11 @@ struct TabItemView: View {
                 FaviconIconView(image: image)
                     .frame(width: iconSlotSize, height: iconSlotSize, alignment: .center)
                     .clipped()
+            } else if let iconAsset = tab.iconAsset {
+                Image(iconAsset, bundle: .main)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: compactMarkSize, height: compactMarkSize, alignment: .center)
             } else if let iconName = tab.icon {
                 if iconName == "globe", !showGlobeFallback {
                     // Avoid a distracting "globe -> favicon" flash: show a neutral placeholder
@@ -623,6 +628,11 @@ struct TabItemView: View {
         TabBarMetrics.closeIconSize * fontScale
     }
 
+    /// Optical mark size for compact glyphs and host-provided asset icons.
+    private var compactMarkSize: CGFloat {
+        max(10, TabBarMetrics.iconSize - 2.5) * fontScale
+    }
+
     /// Spacing between the leading icon and the title, scaled to the font.
     private var scaledContentSpacing: CGFloat {
         TabBarMetrics.contentSpacing * fontScale
@@ -632,7 +642,7 @@ struct TabItemView: View {
         // `terminal.fill` reads visually heavier than most symbols at the same point size.
         // Keep the base sizes hardcoded to avoid cross-glyph layout shifts, then scale to the font.
         if iconName == "terminal.fill" || iconName == "terminal" || iconName == "globe" {
-            return max(10, TabBarMetrics.iconSize - 2.5) * fontScale
+            return compactMarkSize
         }
         return scaledIconSize
     }
