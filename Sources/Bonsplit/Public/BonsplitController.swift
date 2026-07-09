@@ -411,6 +411,7 @@ public final class BonsplitController {
         let sourcePaneId = sourcePane.id
 
         if sourcePaneId == targetPane.id {
+            guard configuration.allowTabReordering else { return false }
             // Reorder within same pane.
             let destinationIndex: Int = {
                 if let index { return max(0, min(index, sourcePane.tabs.count)) }
@@ -424,6 +425,7 @@ public final class BonsplitController {
             return true
         }
 
+        guard configuration.allowCrossPaneTabMove else { return false }
         internalController.moveTab(tabItem, from: sourcePaneId, to: targetPane.id, atIndex: index)
         delegate?.splitTabBar(self, didMoveTab: movedTab, fromPane: sourcePaneId, toPane: targetPane.id)
         notifyGeometryChange()
@@ -437,6 +439,7 @@ public final class BonsplitController {
     /// - Returns: true if reordered.
     @discardableResult
     public func reorderTab(_ tabId: TabID, toIndex: Int) -> Bool {
+        guard configuration.allowTabReordering else { return false }
         guard let (pane, sourceIndex) = findTabInternal(tabId) else { return false }
         let destinationIndex = max(0, min(toIndex, pane.tabs.count))
         pane.moveTab(from: sourceIndex, to: destinationIndex)

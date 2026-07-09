@@ -31,4 +31,21 @@ final class EmbeddedConfigurationTests: XCTestCase {
         }
         XCTAssertEqual(updated.dividerPosition, 0.02, accuracy: 0.0001)
     }
+
+    func testDisabledTabMovesRejectBothReorderAndCrossPaneMutation() throws {
+        let controller = BonsplitController(configuration: BonsplitConfiguration(
+            allowTabReordering: false,
+            allowCrossPaneTabMove: false
+        ))
+        let rootPane = try XCTUnwrap(controller.allPaneIds.first)
+        let firstTab = try XCTUnwrap(controller.createTab(title: "first", inPane: rootPane))
+        _ = try XCTUnwrap(controller.createTab(title: "second", inPane: rootPane))
+        let secondPane = try XCTUnwrap(controller.splitPane(rootPane, orientation: .horizontal))
+        let orderBefore = controller.tabs(inPane: rootPane).map(\.id)
+
+        XCTAssertFalse(controller.reorderTab(firstTab, toIndex: 1))
+        XCTAssertEqual(controller.tabs(inPane: rootPane).map(\.id), orderBefore)
+        XCTAssertFalse(controller.moveTab(firstTab, toPane: secondPane))
+        XCTAssertEqual(controller.tabs(inPane: rootPane).map(\.id), orderBefore)
+    }
 }
