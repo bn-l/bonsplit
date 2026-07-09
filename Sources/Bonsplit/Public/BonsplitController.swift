@@ -939,7 +939,7 @@ public final class BonsplitController {
 
     /// Set divider position for a split node (0.0-1.0)
     /// - Parameters:
-    ///   - position: The new divider position (clamped to 0.1-0.9)
+    ///   - position: The new divider position (clamped to the configured range)
     ///   - splitId: The UUID of the split to update
     ///   - fromExternal: Set to true to suppress outgoing notifications (prevents loops)
     /// - Returns: true if the split was found and updated
@@ -951,8 +951,8 @@ public final class BonsplitController {
             internalController.isExternalUpdateInProgress = true
         }
 
-        // Clamp position to valid range
-        let clampedPosition = min(max(position, 0.1), 0.9)
+        let range = configuration.dividerPositionRange
+        let clampedPosition = min(max(position, range.lowerBound), range.upperBound)
         split.dividerPosition = clampedPosition
 
         if fromExternal {

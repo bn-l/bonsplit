@@ -1449,12 +1449,14 @@ struct TabBarView: View {
                 dropLifecycle: $dropLifecycle
             )
         )
-        .background(
-            TabBarHostWindowReader { window in
-                controlKeyMonitor.setHostWindow(window)
+        .background {
+            if splitViewController.tabShortcutHintsEnabled {
+                TabBarHostWindowReader { window in
+                    controlKeyMonitor.setHostWindow(window)
+                }
+                .frame(width: 0, height: 0)
             }
-            .frame(width: 0, height: 0)
-        )
+        }
         // Clear drop state when drag ends elsewhere (cancelled, dropped in another pane, etc.)
         .onChange(of: splitViewController.draggingTab) { _, newValue in
 #if DEBUG
@@ -1470,7 +1472,16 @@ struct TabBarView: View {
             }
         }
         .onAppear {
-            controlKeyMonitor.start()
+            if splitViewController.tabShortcutHintsEnabled {
+                controlKeyMonitor.start()
+            }
+        }
+        .onChange(of: splitViewController.tabShortcutHintsEnabled) { _, enabled in
+            if enabled {
+                controlKeyMonitor.start()
+            } else {
+                controlKeyMonitor.stop()
+            }
         }
         .onPreferenceChange(TabFramePreferenceKey.self) { frames in
             withTransaction(Transaction(animation: nil)) {
@@ -1515,6 +1526,7 @@ struct TabBarView: View {
             showsControlShortcutHint: showsControlShortcutHints,
             shortcutModifierSymbol: controlKeyMonitor.shortcutModifierSymbol,
             allowsClose: controller.configuration.allowCloseTabs,
+            allowsContextMenu: controller.configuration.allowsTabContextMenu,
             contextMenuState: contextMenuState,
             moveDestinationsProvider: {
                 controller.tabContextMoveDestinationsProvider?(TabID(id: tab.id), pane.id) ?? []
