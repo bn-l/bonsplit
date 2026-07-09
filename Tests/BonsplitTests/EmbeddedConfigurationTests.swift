@@ -17,19 +17,24 @@ final class EmbeddedConfigurationTests: XCTestCase {
         )
         let controller = BonsplitController(configuration: configuration)
         let rootPane = try XCTUnwrap(controller.allPaneIds.first)
-        XCTAssertNotNil(controller.splitPane(rootPane, orientation: .horizontal))
+        XCTAssertNotNil(controller.splitPane(
+            rootPane,
+            orientation: .horizontal,
+            initialDividerPosition: 0.02
+        ))
         guard case .split(let split) = controller.treeSnapshot() else {
             XCTFail("Expected split root")
             return
         }
+        XCTAssertEqual(split.dividerPosition, 0.02, accuracy: 0.0001)
         let splitID = try XCTUnwrap(UUID(uuidString: split.id))
 
-        XCTAssertTrue(controller.setDividerPosition(0.02, forSplit: splitID))
+        XCTAssertTrue(controller.setDividerPosition(0.98, forSplit: splitID))
         guard case .split(let updated) = controller.treeSnapshot() else {
             XCTFail("Expected split root")
             return
         }
-        XCTAssertEqual(updated.dividerPosition, 0.02, accuracy: 0.0001)
+        XCTAssertEqual(updated.dividerPosition, 0.98, accuracy: 0.0001)
     }
 
     func testDisabledTabMovesRejectBothReorderAndCrossPaneMutation() throws {

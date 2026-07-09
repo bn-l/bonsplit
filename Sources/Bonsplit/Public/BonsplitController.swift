@@ -513,11 +513,12 @@ public final class BonsplitController {
         }
 
         // Perform split
+        let dividerPosition = normalizedInitialDividerPosition(initialDividerPosition)
         internalController.splitPane(
             PaneID(id: targetPaneId.id),
             orientation: orientation,
             with: internalTab,
-            initialDividerPosition: initialDividerPosition
+            initialDividerPosition: dividerPosition
         )
 
         // Find new pane (will be focused after split)
@@ -578,12 +579,13 @@ public final class BonsplitController {
         )
 
         // Perform split with insertion side.
+        let dividerPosition = normalizedInitialDividerPosition(initialDividerPosition)
         internalController.splitPaneWithTab(
             PaneID(id: targetPaneId.id),
             orientation: orientation,
             tab: internalTab,
             insertFirst: insertFirst,
-            initialDividerPosition: initialDividerPosition
+            initialDividerPosition: dividerPosition
         )
 
         let newPaneId = focusedPaneId!
@@ -594,6 +596,15 @@ public final class BonsplitController {
         notifyGeometryChange()
 
         return newPaneId
+    }
+
+    private func normalizedInitialDividerPosition(_ position: CGFloat?) -> CGFloat? {
+        position.map {
+            min(
+                max($0, configuration.dividerPositionRange.lowerBound),
+                configuration.dividerPositionRange.upperBound
+            )
+        }
     }
 
     /// Split a pane by moving an existing tab into the new pane.
