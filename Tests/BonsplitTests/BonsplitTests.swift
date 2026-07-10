@@ -2871,6 +2871,13 @@ final class BonsplitTests: XCTestCase {
                 permitsTabTransfer: false
             )
         )
+        XCTAssertFalse(
+            UnifiedPaneDropDelegate.shouldHandleFileDrop(
+                hasTabTransfer: true,
+                hasFileURL: false,
+                permitsTabTransfer: false
+            )
+        )
     }
 
     func testSelectedTabNeverShowsHoverBackground() {
