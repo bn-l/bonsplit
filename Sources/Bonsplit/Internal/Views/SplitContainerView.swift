@@ -737,10 +737,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 let firstSubview = splitView.arrangedSubviews[0]
                 return splitState.orientation == .horizontal ? firstSubview.frame.width : firstSubview.frame.height
             }()
-            let currentNormalized = max(
-                stateBounds.lowerBound,
-                min(stateBounds.upperBound, currentDividerPixels / availableSize)
-            )
+            // Compare the RAW ratio, not a pre-clamped one: clamping the
+            // current position into stateBounds before the equality check
+            // would let a divider that physically drifted outside the
+            // configured range (window resize, range narrowed on a reused
+            // split view) satisfy the early return and stay out of range.
+            let currentNormalized = currentDividerPixels / availableSize
 
             if abs(clampedStatePosition - lastAppliedPosition) <= 0.01 &&
                 abs(currentNormalized - clampedStatePosition) <= 0.01 {

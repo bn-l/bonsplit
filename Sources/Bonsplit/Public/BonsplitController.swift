@@ -598,13 +598,14 @@ public final class BonsplitController {
         return newPaneId
     }
 
-    private func normalizedInitialDividerPosition(_ position: CGFloat?) -> CGFloat? {
-        position.map {
-            min(
-                max($0, configuration.dividerPositionRange.lowerBound),
-                configuration.dividerPositionRange.upperBound
-            )
-        }
+    private func normalizedInitialDividerPosition(_ position: CGFloat?) -> CGFloat {
+        // A nil position must not bypass the configured range: the internal
+        // controller's 0.5 fallback can sit outside a narrowed range, so the
+        // default is clamped here exactly like an explicit position.
+        min(
+            max(position ?? 0.5, configuration.dividerPositionRange.lowerBound),
+            configuration.dividerPositionRange.upperBound
+        )
     }
 
     /// Split a pane by moving an existing tab into the new pane.
