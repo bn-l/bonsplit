@@ -353,7 +353,7 @@ struct UnifiedPaneDropDelegate: DropDelegate {
 
     private func effectiveZone(for info: DropInfo) -> DropZone {
         let defaultZone = zoneForLocation(info.location)
-        guard !isFileDropOnly(info) else {
+        guard !shouldHandleFileDrop(info, zone: defaultZone) else {
             return defaultZone
         }
         guard let draggedTab = controller.activeDragTab ?? controller.draggingTab,
