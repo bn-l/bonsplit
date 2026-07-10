@@ -52,5 +52,14 @@ final class EmbeddedConfigurationTests: XCTestCase {
         XCTAssertEqual(controller.tabs(inPane: rootPane).map(\.id), orderBefore)
         XCTAssertFalse(controller.moveTab(firstTab, toPane: secondPane))
         XCTAssertEqual(controller.tabs(inPane: rootPane).map(\.id), orderBefore)
+        let paneCountBefore = controller.allPaneIds.count
+        XCTAssertNil(controller.splitPane(
+            rootPane,
+            orientation: .vertical,
+            movingTab: firstTab,
+            insertFirst: false
+        ))
+        XCTAssertEqual(controller.allPaneIds.count, paneCountBefore)
+        XCTAssertEqual(controller.tabs(inPane: rootPane).map(\.id), orderBefore)
     }
 }

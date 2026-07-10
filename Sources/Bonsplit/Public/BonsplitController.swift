@@ -626,7 +626,8 @@ public final class BonsplitController {
         movingTab tabId: TabID,
         insertFirst: Bool
     ) -> PaneID? {
-        guard configuration.allowSplits else { return nil }
+        guard configuration.allowSplits,
+              configuration.allowCrossPaneTabMove else { return nil }
 
         // Find the existing tab and its source pane.
         guard let (sourcePane, tabIndex) = findTabInternal(tabId) else { return nil }
