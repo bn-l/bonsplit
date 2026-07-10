@@ -411,6 +411,9 @@ struct UnifiedPaneDropDelegate: DropDelegate {
 
         let hasTabTransfer = info.hasItemsConforming(to: [.tabTransfer])
         let hasFileURL = info.hasItemsConforming(to: [.fileURL])
+        if hasTabTransfer, !bonsplitController.configuration.allowCrossPaneTabMove {
+            return false
+        }
 
         // Read from non-observable drag state. @Observable writes from createItemProvider
         // may not have propagated yet when performDrop runs.
@@ -554,6 +557,9 @@ struct UnifiedPaneDropDelegate: DropDelegate {
         let hasTabTransfer = info.hasItemsConforming(to: [.tabTransfer])
         let hasFileURL = info.hasItemsConforming(to: [.fileURL])
         guard hasTabTransfer || hasFileURL else { return false }
+        if hasTabTransfer, !bonsplitController.configuration.allowCrossPaneTabMove {
+            return false
+        }
 
         if Self.isFileDropOnly(hasTabTransfer: hasTabTransfer, hasFileURL: hasFileURL) {
             guard Self.acceptsFileDrop(
