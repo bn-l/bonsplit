@@ -37,6 +37,21 @@ final class EmbeddedConfigurationTests: XCTestCase {
         XCTAssertEqual(updated.dividerPosition, 0.98, accuracy: 0.0001)
     }
 
+    func testDefaultSplitPositionRespectsConfiguredDividerRange() throws {
+        let controller = BonsplitController(configuration: BonsplitConfiguration(
+            dividerPositionRange: 0.6...0.9
+        ))
+        let rootPane = try XCTUnwrap(controller.allPaneIds.first)
+        XCTAssertNotNil(controller.splitPane(rootPane, orientation: .horizontal))
+        guard case .split(let split) = controller.treeSnapshot() else {
+            XCTFail("Expected split root")
+            return
+        }
+        // The implicit 0.5 default must be clamped into the configured range,
+        // exactly like an explicit initialDividerPosition.
+        XCTAssertEqual(split.dividerPosition, 0.6, accuracy: 0.0001)
+    }
+
     func testDisabledTabMovesRejectBothReorderAndCrossPaneMutation() throws {
         let controller = BonsplitController(configuration: BonsplitConfiguration(
             allowTabReordering: false,
