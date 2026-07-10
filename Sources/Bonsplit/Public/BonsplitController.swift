@@ -657,12 +657,14 @@ public final class BonsplitController {
             }
         }
 
-        // Perform split with the moved tab.
+        // Perform split with the moved tab. Forward the clamped default so the
+        // moved-tab path honors dividerPositionRange like the other overloads.
         internalController.splitPaneWithTab(
             PaneID(id: targetPaneId.id),
             orientation: orientation,
             tab: tabItem,
-            insertFirst: insertFirst
+            insertFirst: insertFirst,
+            initialDividerPosition: normalizedInitialDividerPosition(nil)
         )
 
         let newPaneId = focusedPaneId!
