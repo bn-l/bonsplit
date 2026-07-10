@@ -52,6 +52,28 @@ final class EmbeddedConfigurationTests: XCTestCase {
         XCTAssertEqual(split.dividerPosition, 0.6, accuracy: 0.0001)
     }
 
+    func testMovingTabSplitRespectsConfiguredDividerRange() throws {
+        let controller = BonsplitController(configuration: BonsplitConfiguration(
+            dividerPositionRange: 0.6...0.9
+        ))
+        let rootPane = try XCTUnwrap(controller.allPaneIds.first)
+        let firstTab = try XCTUnwrap(controller.createTab(title: "first", inPane: rootPane))
+        _ = try XCTUnwrap(controller.createTab(title: "second", inPane: rootPane))
+        XCTAssertNotNil(controller.splitPane(
+            rootPane,
+            orientation: .horizontal,
+            movingTab: firstTab,
+            insertFirst: false
+        ))
+        guard case .split(let split) = controller.treeSnapshot() else {
+            XCTFail("Expected split root")
+            return
+        }
+        // The moved-tab split path must clamp its implicit default like the
+        // tab-creating overloads.
+        XCTAssertEqual(split.dividerPosition, 0.6, accuracy: 0.0001)
+    }
+
     func testDisabledTabMovesRejectBothReorderAndCrossPaneMutation() throws {
         let controller = BonsplitController(configuration: BonsplitConfiguration(
             allowTabReordering: false,
