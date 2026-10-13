@@ -283,7 +283,7 @@ struct TabItemView: View {
     let shortcutModifierSymbol: String
     let allowsClose: Bool
     let allowsContextMenu: Bool
-    let contextMenuState: TabContextMenuState
+    let contextMenuStateProvider: () -> TabContextMenuState
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
     let forkConversationOpenAvailabilityProvider: () -> Bool?
     let onSelect: () -> Void
@@ -336,7 +336,9 @@ struct TabItemView: View {
         // Icon-only pinned tabs always size to their fixed compact width.
         .fixedSize(horizontal: isIconOnlyPinned || !fillsWidth, vertical: false)
         .background(tabBackground.saturation(saturation))
-        .tabControlShortcutHintVisibilityAnimation(value: showsShortcutHint)
+        // The hint crossfade is animated where it happens (`trailingAccessory`,
+        // `iconOnlyContent`). An animation here would wrap the whole tab and
+        // copy its entire view value on every render.
         .contentShape(Rectangle().inset(by: -BonsplitTabItemHitTesting.horizontalSlop))
         // Middle click to close (macOS convention).
         // Uses an AppKit event monitor so it doesn't interfere with left click selection or drag/reorder.
@@ -349,7 +351,7 @@ struct TabItemView: View {
                 TabContextMenuPresenter(
                     snapshot: TabContextMenuSnapshot(
                         tabId: tab.id,
-                        state: contextMenuState,
+                        stateProvider: contextMenuStateProvider,
                         moveDestinationsProvider: moveDestinationsProvider,
                         forkConversationOpenAvailabilityProvider: forkConversationOpenAvailabilityProvider
                     ),
@@ -1345,9 +1347,50 @@ private struct MiddleClickMonitorView: NSViewRepresentable {
 
 struct TabContextMenuSnapshot {
     let tabId: UUID
-    let state: TabContextMenuState
+    /// Builds the menu's tab state. The tab strip renders every tab far more
+    /// often than a menu opens, and the state calls host providers and walks
+    /// the pane tree, so it is computed only when a menu is built.
+    private let stateProvider: () -> TabContextMenuState
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
     let forkConversationOpenAvailabilityProvider: () -> Bool?
+
+    var state: TabContextMenuState { stateProvider() }
+
+    init(
+        tabId: UUID,
+        state: TabContextMenuState,
+        moveDestinationsProvider: @escaping () -> [TabContextMoveDestination],
+        forkConversationOpenAvailabilityProvider: @escaping () -> Bool?
+    ) {
+        self.init(
+            tabId: tabId,
+            stateProvider: { state },
+            moveDestinationsProvider: moveDestinationsProvider,
+            forkConversationOpenAvailabilityProvider: forkConversationOpenAvailabilityProvider
+        )
+    }
+
+    init(
+        tabId: UUID,
+        stateProvider: @escaping () -> TabContextMenuState,
+        moveDestinationsProvider: @escaping () -> [TabContextMoveDestination],
+        forkConversationOpenAvailabilityProvider: @escaping () -> Bool?
+    ) {
+        self.tabId = tabId
+        self.stateProvider = stateProvider
+        self.moveDestinationsProvider = moveDestinationsProvider
+        self.forkConversationOpenAvailabilityProvider = forkConversationOpenAvailabilityProvider
+    }
+
+    /// A copy whose state is computed now, so one menu build reads one value.
+    func resolvingState() -> TabContextMenuSnapshot {
+        TabContextMenuSnapshot(
+            tabId: tabId,
+            state: state,
+            moveDestinationsProvider: moveDestinationsProvider,
+            forkConversationOpenAvailabilityProvider: forkConversationOpenAvailabilityProvider
+        )
+    }
 }
 
 final class TabContextMenuActionTarget: NSObject {
@@ -1370,9 +1413,10 @@ final class TabContextMenuActionTarget: NSObject {
 
 enum TabContextMenuBuilder {
     static func makeMenu(
-        snapshot: TabContextMenuSnapshot,
+        snapshot unresolvedSnapshot: TabContextMenuSnapshot,
         target: TabContextMenuActionTarget
     ) -> NSMenu {
+        let snapshot = unresolvedSnapshot.resolvingState()
         var state = snapshot.state
         let canForkConversationAtOpen = snapshot.forkConversationOpenAvailabilityProvider()
         let forkConversationEnabled = canForkConversationAtOpen ?? state.canForkConversation
