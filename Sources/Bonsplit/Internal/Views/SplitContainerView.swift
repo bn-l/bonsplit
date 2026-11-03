@@ -3,7 +3,7 @@ import AppKit
 
 private var splitContainerProgrammaticSyncDepth = 0
 
-private class ThemedSplitView: NSSplitView {
+class ThemedSplitView: NSSplitView {
     var customDividerColor: NSColor?
 
     /// Host-configured divider thickness in points. When `nil` the split view
@@ -65,6 +65,47 @@ private class ThemedSplitView: NSSplitView {
     // See `NonDraggableHostingView` in SplitNodeView.swift for the rest of
     // the chain.
     override var mouseDownCanMoveWindow: Bool { false }
+
+    /// Offered a divider double-click released without dragging; returns
+    /// whether the host handled it. Set by `SplitContainerView`.
+    var onDividerDoubleClick: (() -> Bool)?
+
+    override func mouseDown(with event: NSEvent) {
+        // A mouseDown that reaches the split view itself is on a divider: the
+        // arranged subviews cover all pane content. Peek (without dequeuing)
+        // at what follows the second press. A drag stays with AppKit's native
+        // divider tracking below; a release is a double-click to offer.
+        let window = self.window
+        if event.clickCount == 2,
+           arrangedSubviews.count >= 2,
+           let onDividerDoubleClick,
+           let next = nextDividerEvent(in: window, dequeue: false),
+           next.type == .leftMouseUp,
+           next.windowNumber == event.windowNumber,
+           onDividerDoubleClick() {
+            // Drop the release from the window captured before the host ran;
+            // the host may have moved or removed this view.
+            _ = nextDividerEvent(in: window, dequeue: true)
+            return
+        }
+        trackDivider(with: event)
+    }
+
+    /// AppKit's native divider tracking (the drag loop).
+    func trackDivider(with event: NSEvent) {
+        super.mouseDown(with: event)
+    }
+
+    /// The drag or release that follows the current press. The button is
+    /// down, so one always arrives.
+    func nextDividerEvent(in window: NSWindow?, dequeue: Bool) -> NSEvent? {
+        window?.nextEvent(
+            matching: [.leftMouseDragged, .leftMouseUp],
+            until: .distantFuture,
+            inMode: .eventTracking,
+            dequeue: dequeue
+        )
+    }
 }
 
 #if DEBUG
@@ -131,6 +172,7 @@ private final class DebugSplitView: ThemedSplitView {
 /// SwiftUI wrapper around NSSplitView for native split behavior
 struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentable {
     @Bindable var splitState: SplitState
+    @Environment(BonsplitController.self) private var bonsplitController
     let controller: SplitViewController
     let appearance: BonsplitConfiguration.Appearance
     let dividerPositionRange: ClosedRange<CGFloat>
@@ -171,6 +213,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         splitView.isVertical = splitState.orientation == .horizontal
         splitView.dividerStyle = .thin
         splitView.delegate = context.coordinator
+        splitView.onDividerDoubleClick = dividerDoubleClickHandler()
         splitView.wantsLayer = true
         splitView.layer?.backgroundColor = NSColor.clear.cgColor
         splitView.layer?.isOpaque = false
@@ -361,7 +404,17 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         return splitView
     }
 
+    /// Offers a divider double-click to the host delegate for this split.
+    private func dividerDoubleClickHandler() -> () -> Bool {
+        let splitId = splitState.id
+        return { [weak bonsplitController] in
+            guard let bonsplitController else { return false }
+            return bonsplitController.delegate?.splitTabBar(bonsplitController, didDoubleClickDivider: splitId) == true
+        }
+    }
+
     func updateNSView(_ splitView: NSSplitView, context: Context) {
+        (splitView as? ThemedSplitView)?.onDividerDoubleClick = dividerDoubleClickHandler()
         // SwiftUI may reuse the same NSSplitView/Coordinator instance while the underlying SplitState
         // object changes (e.g., during split tree restructuring). Keep the coordinator pointed at
         // the latest state to avoid syncing geometry against a stale model.
